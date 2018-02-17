@@ -1,0 +1,116 @@
+\magnification=\magstep1
+\def\meno{\medskip\noindent}
+\centerline{\bf Features ODE Report}
+\smallskip
+\centerline{17 January, 2018}
+\bigskip\bigskip
+
+\def\feat{C\mskip -10mu\lower-2pt\hbox{\fiverm 1}\,}
+\noindent The equations that we have to implement are 
+$$\eqalign{ \hat \alpha
+q^{(4)}+2\dot{\hat\alpha}q^{(3)}+(\ddot{\hat\alpha}+\dot{\hat\gamma}-\hat
+R) \ddot q &-\left(\dot{\hat R}-\ddot{\hat\gamma}-\lambda_M\hat
+N^\natural+\lambda_M(\hat N^\natural)'\right)\dot q\cr
+&-\left((\dot{\hat N}^\natural)'-\hat P\right)q +{1-\lambda_C\over
+n}b+\nabla_q w_s(t,q)=0, \cr}\eqno(1)$$
+where
+$$R=\beta I+\lambda_M M^\natural, \quad P=k I+B^\natural-\lambda_CM^\natural+
+\lambda_1 M+\lambda_M O^\natural,$$
+and
+$$\displaylines{
+M_{j\ell}= \sum_{x\in X^\sharp}g_x \Gamma_{T_x(j)}\Gamma_{T_x(l)},
+\qquad N_{j\ell}= \sum_{x\in X^\sharp} g_x (\dot \Gamma_{T_x(j)}
++v\cdot\Delta\Gamma_{T_x(j)})\Gamma_{T_x(l)}\cr
+O_{jl}=\sum_{x\in X^\sharp}
+g_x (\dot \Gamma_{T_x(j)}+v\cdot\Delta\Gamma_{T_x(j)})
+(\dot \Gamma_{T_x(l)}+v\cdot\Delta\Gamma_{T_x(l)}),\cr
+ b_j(t):=\sum_{x\in X^\sharp} g_x \Gamma_{T_x(j)},
+    \qquad B_{j\ell}=b_j b_\ell\cr
+w_s(t,q):=\sum_{i=0}^{n-1}\sum_{x\in X^\sharp} g_x
+    \Bigl({1\over n} +\sum_{j\in J_i}q_j\Gamma_{T_x(j)}\Bigr)
+    \Bigl[\sum_{k\in J_i}q_k\Gamma_{T_x(k)}<-{1\over n}\Bigr].\cr}$$
+The constants $\alpha$, $\beta$, $\gamma$, $\lambda_M$, $\lambda_C$,
+$\lambda_1$ and $k$ are all positive and real and in order to obtain
+stability of the equation when the input signal is $0$ we have to
+choose this constants such that
+$$\alpha>0,\quad \beta>0,\quad k>0\quad \gamma>{\beta\over
+    \theta},\quad 0<\alpha<{(\beta-\gamma\theta)
+    [\beta-\theta(\gamma+2\theta)]\over 4 k}.$$
+We have introduced the following notation: Given a matrix $Q$ over the
+indexes of $J$ i.e. given the numbers $Q_{j\ell}$ with $j,\ell\in J$
+we define  $(Q^\natural)_{j\ell}=Q_{j\ell}\cdot
+[\hbox{$j$ and $\ell\in J_k$ for some $k$}]$. (Here $J$ is an appropriate
+subset of $\{0,1,\dots, mn(3\ell+1)^2-1\}$ defined in Appendix~B)
+
+We also use the convention that $\hat f=h\cdot f$, where
+$h$ is a given function of time (it seems reasonable to choose
+$h(t)=e^\theta t$). The term $g_x$ is a spatial probability
+distribution.
+
+When working in batch mode in the temporal interval $[0,T]$
+we need to solve Eq.~(1) with the additional conditions at $t=T$:
+$$\eqalign{ &\hat\alpha\ddot q(T)+\hat\gamma\dot q(T)=0\cr &\hat\alpha
+ q^{(3)}(T)-\dot{\hat\alpha}\ddot q(T)+(\hat\beta+\lambda_M\hat
+ M^\natural -\dot{\hat\gamma}) \dot q(T)+\lambda_M(\hat
+ N^\sharp)'q(T)=0.\cr } $$
+All the matrices in Eq.~(1) have dimensions $L\times L$ where $L=|J|=
+mn(2\ell+1)^2$ where
+\smallskip
+\item{1. } $m$ is the dimension of the input representation (for example
+for RGB
+videos $m=3$);
+\item{2. }  $n$ is the dimension of the feature representation;
+\item{3. } $\ell^2$ is the number of pixels in the retina. 
+
+\meno
+{\bf First order equations.\enspace} Equation~(1) can be rewritten as
+$$q^{(4)}=-A(t)q^{(3)}-B(t)q^{(2)}-C(t)q^{(1)}+D(t)q-F(t,q),
+\eqno(2)$$
+where
+$$\eqalign{ &A(t)=2{\dot h\over h};\cr
+&B(t)={\ddot h\over
+h}+{\gamma\dot h\over \alpha h} -{\beta\over \alpha}-{\lambda_M\over
+\alpha}M^\natural;\cr
+&C(t)={\gamma \ddot h\over \alpha h}-{\beta\dot
+h\over \alpha h} -{\lambda_M\dot h\over \alpha h}-{\lambda_M\over
+\alpha}(\dot M^\natural+(N^\natural)' -N^\natural);\cr
+&D(t)=-{\lambda_M \dot h\over \alpha h} (N^\natural)'+{\lambda_M\over
+\alpha}(O^\natural -(\dot N^\natural)')+{k\over
+\alpha}+{B^\natural\over \alpha}-{\lambda_C\over \alpha} M^\natural
++{\lambda_1\over \alpha}M;\cr
+&F(t,q)={1-\lambda_C\over \alpha
+n}b+{1\over \alpha}\nabla_q w_s(t,q).}$$
+Now let us consider the following system of first order differential
+equations
+$$\dot q_1=q_2,\quad \dot q_2=q_3,\quad\dot q_3=q_4,\quad
+\dot q_4=-A(t)q_4-B(t)q_3-C(t)q_2-D(t)q_1-F(t,q_1).\eqno(3)$$
+Then the system in Eq.~(2) is equivalent to Eq.~(1) in the sense that
+if $u$ solves Eq.~(1), then $(u,\dot u, \ddot u, u^{(3)}, u^{(4)})$
+solves Eq.~(2), and if $(u_1,u_2,u_3, u_4)$ is a solution of~(2), then
+$u_1$ is a solution of Eq.~(1).
+
+Now the system in Eq.~(3) can be written in matricial form as
+$$
+\pmatrix{\dot q_1\cr \dot q_2\cr \dot q_3\cr \dot q_4\cr}=
+-\pmatrix{0&-1&0&0\cr0&0&-1&0\cr0&0&0&-1\cr D(t)&C(t)&B(t)&A(t)\cr}
+\pmatrix{q_1\cr q_2\cr q_3\cr q_4\cr}-\pmatrix{0\cr 0\cr 0\cr F(t,q_1)\cr}.
+\eqno(4)$$
+Then if we define $Q=(q_1,q_2,q_3,q_4)$,
+$$W:=-\pmatrix{0&-1&0&0\cr0&0&-1&0\cr0&0&0&-1\cr D&C&B&A\cr},
+\quad Z:=-\pmatrix{0\cr 0\cr 0\cr F(t,q_1)\cr},$$
+Eq.~(4) is just $\dot Q=WQ+Z$.
+
+
+\def\eps{\varepsilon}
+\meno
+{\bf New constraint.\enspace} The $\varepsilon$-insensitive function
+around $1$ is
+$$I(x)=(x-1-\eps)[x-1>+\eps]-(x-1+\eps)[x-1<-\eps] =\bar I(x-1)$$
+now since $\sum_{i=1}^n \feat_i-1=\sum_{j\in J}q_j\Gamma_{T_x(j)}$, we can
+define define
+$$W(t,q):=w_s(t,q)+\sum_{x\in X^\natural} g_x \bar I\Big(\sum_{j\in J}q_j
+\Gamma_{T_x(j)}\Big).$$
+With this definition the new Euler-Lagrange equations are obtained
+if we replace $w_s\gets W$ and we set $\lambda_1=0$ in
+the old Euler-Lagrange equations.
+\bye

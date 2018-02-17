@@ -1,0 +1,75 @@
+\magnification=\magstep1
+\baselineskip14pt
+\tracingpages=1 % show paging decisions, to help with figure placement
+\baselineskip=12pt minus .1pt % allow tiny bit of flexibility
+
+\def\today{\ifcase\month\or
+  January\or February\or March\or April\or May\or June\or
+  July\or August\or September\or October\or November\or December\fi
+  \space\number\day, \number\year}
+
+\newcount\twodigits
+\def\hours{\twodigits=\time \divide\twodigits by 60 \printtwodigits
+  \multiply\twodigits by-60 \advance\twodigits by\time
+  :\printtwodigits}
+
+\def\gobbleone1{}
+\def\printtwodigits{\advance\twodigits100
+  \expandafter\gobbleone\number\twodigits
+  \advance\twodigits-100 }
+  
+\def\frac#1#2{{#1\over #2}}
+\def\feat{C\mskip -10mu\lower-2pt\hbox{\fiverm 1}\,}
+\def\dts{\mathinner{\ldotp\ldotp}}
+
+\font\ninerm=cmr9
+\font\eightrm=cmr8
+
+\line{{\bf Adjusting the entropy term}\hfil{\eightrm
+rough notes, \today\/ @ \hours}}
+\bigskip
+\bigskip\begingroup\narrower\narrower
+\noindent As it is pointed out in our technical report (arXiv:1801.07110)
+the entropy term is not local in time. Here it is presented the third
+possible solution that has been identified in the technical report.
+\par\endgroup
+
+\bigskip
+\bigskip\noindent
+In Appendix~B we derived that the action can be written as
+$$ \eqalign{ {\cal A}(q)= &\sum_{i=0}^{n-1}\Bigl(\int_0^Tdt\, h
+\sum_{j\in J_i} b_j q_j\Bigr)^2+ \int_0^Tdt\, h
+\Bigl(\frac{\alpha}{2}|\ddot q|^2+ \frac{\beta}{2}|\dot
+q|^2+\frac{\lambda_M}{2}\dot q\cdot M^\natural \dot q\cr &+\lambda_M
+q\cdot N^\natural \dot q+\frac{1}{2}q\cdot
+\bigl(k-\lambda_CM^\natural+ \lambda_1 M+\lambda_M
+O^\natural\bigr)q\cr &+\frac{1-\lambda_C}{n}b\cdot
+q+w_s(t,q)\Bigr).\cr}\eqno(1)$$
+The first term is non local in time; we can solve this problem by introducing
+some auxiliary variables
+$$s_i(t)=\sum_{x\in X^\sharp}\int_0^t d\tau\, \omega^t_x(\tau)
+\feat^\sharp_{ix}(\tau),\eqno(2)$$
+where $\omega^t_x(\tau)$
+is some probability density over the retina and over the
+temporal interval which has the property that $\sum_{x\in X^\sharp}\int_0^t
+d\tau\, \omega_x^t(\tau)=1$. Of course one would be led to assume that
+$\omega_x^t(\tau)=g_x h(\tau)/\int_0^td\tau\, h(\tau)$, however since we
+are dealing with an approximation
+
+Now replacing the entropy term with a causal term that is the temporal
+mean of the entropy computed for each time $t$ on the interval $[0\dts t]$:
+$$\frac{1}{T}\int_0^Tdt\, m(t) s_i^2(t).\eqno(3)$$
+Moreover we also need to add to the action the constraint in Eq.~(2) in the
+form
+$$\int_0^T dt\, m(t)  \Bigl(\dot s_i- \sum_{x\in X^\sharp} \omega_x(t)
+\feat^\sharp_{ix}(t)\Bigr)^2.$$
+Here $m(t)$ is a smooth function of time; since it is not clear whether it
+is better to weight the integral with $h(t)$ or not we will derive the EL
+equations with this general function of time. Also we have set $\omega_x^t(t)
+=\omega_x(t)$.
+
+In this way Eq.~(1) becomes
+$${\cal A}(q,s)=$$
+
+
+\bye

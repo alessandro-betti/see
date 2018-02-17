@@ -1,0 +1,115 @@
+\magnification=\magstep1
+\baselineskip14pt
+\tracingpages=1 % show paging decisions, to help with figure placement
+\baselineskip=12pt minus .1pt % allow tiny bit of flexibility
+
+\def\today{\ifcase\month\or
+  January\or February\or March\or April\or May\or June\or
+  July\or August\or September\or October\or November\or December\fi
+  \space\number\day, \number\year}
+
+\newcount\twodigits
+\def\hours{\twodigits=\time \divide\twodigits by 60 \printtwodigits
+  \multiply\twodigits by-60 \advance\twodigits by\time
+  :\printtwodigits}
+
+\def\gobbleone1{}
+\def\printtwodigits{\advance\twodigits100
+  \expandafter\gobbleone\number\twodigits
+  \advance\twodigits-100 }
+  
+\def\frac#1#2{{#1\over #2}}
+\def\feat{C\mskip -10mu\lower-2pt\hbox{\fiverm 1}\,}
+\def\dts{\mathinner{\ldotp\ldotp}}
+\def\ast{\mathop{\hbox{\lower 1.5pt\hbox{$\buildrel x\over *$}}}}
+\def\Ast#1{\mathop{\hbox{\lower 1.5pt\hbox{$\buildrel #1\over *$}}}}
+
+\font\ninerm=cmr9
+\font\eightrm=cmr8
+
+\line{{\bf Built-in probabilistic normalization}\hfil{\eightrm
+rough notes, \today\/ @ \hours}}
+\bigskip
+\bigskip\begingroup\narrower\narrower
+\noindent We reformulate our theory (arXiv:1801.07110)
+with a built-in probabilistic normalization.
+We therefore eliminate the two terms
+that enforces normalization in the Lagrangian at the cost of
+a strong non-linearity in the definition of the features in terms of the
+filters.
+\par\endgroup
+
+\bigskip
+\bigskip\noindent
+Let $\sigma\colon {\bf R}^n\to {\bf R}^n$ a normalizing function; for the
+moment we will assume that:
+\medskip
+\item{1. } $\sigma\in C^s({\bf R}^n)$, where $s$ is some appropriate degree
+of smoothness ($s\ge1$);
+\item{2. } the function $\sigma$ has the probabilistic normalization
+property: Given any
+$x\in {\bf R}^n$ we have that $\sigma_i(x)\ge0$ for all $i=1,\dots, n$ and
+$\sum_{i=1}^n\sigma_i(x)=1$.
+\item{3. } $\sigma_i(0)=1/n$
+\medskip
+
+So let us replace the definition of the features proposed in (arXiv:1801.07110)
+with the following:
+$$\feat_{ix}^\sharp(t):=\sigma_i\big(q\ast\Gamma(t)\big),
+\qquad \bigl(q\ast\Gamma(t)\bigr)_i:=\sum_{j\in J_i}q_j\Gamma_{T_x(j)}.
+\eqno(1)$$
+Notice that when $\Gamma\equiv 0$ then $\feat_{ix}^\sharp(t)=\sigma_i(0)=1/n$
+(by property 3 above). Let us also define the {\it activation function\/}
+$a_x\colon {\bf R}\to {\bf R}^n$ on the point $x$ by
+$a_x(t):=q\ast\Gamma(t)$. With this notation Eq.~(1) becomes
+$\feat_{ix}^\sharp(t)=\sigma_i(a_x(t))$.
+
+The functional we are now interested in is
+$${\cal A}(q)={\cal A}_0(q)+{\cal H}(q)+{\cal V}_m(q),\eqno(2)$$
+where ${\cal A}_0$ is the regularization term defined in Section~5 and 
+${\cal V}_m(q)$ is the invariance-under-motion term that is identical to the
+one described in the technical report. Clearly here we are making the strong
+assumption that we impose the invariance on the activation rather than
+on the features; invariance of the activation implies
+invariance of the features the converse, however, it is not true.
+
+The remaining term $\cal H$ in Eq.~(2) is {\it minus\/} the mutual
+information. This is the only term that is rewritten with the built-in
+normalization:
+$${\cal H}(q)={1\over2}
+\sum_{i=0}^{n-1}\biggl(\int_0^T dt\, h(t)\sum_{x\in X^\sharp}
+g_x \sigma_i (a_x(t))\biggr)^2-{\lambda_C\over2}
+\sum_{i=0}^{n-1}\int_0^T dt\, h(t)\sum_{x\in X^\sharp}
+g_x \bigl(\sigma_i (a_x(t)\bigr)^2.\eqno(3)$$
+As usual we approximate the entropy to make it local in time, then
+Eq.~(3) becomes 
+$${\cal H}(q)=
+\sum_{i=0}^{n-1}\int_0^T dt\, h(t)\biggl[{1\over2}\biggl(\sum_{x\in X^\sharp}
+g_x \sigma_i(q\ast\Gamma(t))\biggr)^2-{\lambda_C\over2}
+\sum_{x\in X^\sharp} g_x \Bigl(\sigma_i\bigl(q\ast\Gamma(t)\bigr)
+\Bigr)^2\biggr].\eqno(4)$$
+Now we need to compute the variation of this new term; notice however that
+this expression does not depend on the derivatives of $q$, therefore is a
+potential-like term.
+
+Define
+$$\Phi(t,q):=h(t)\biggl[{1\over2}\biggl(\sum_{x\in X^\sharp}
+g_x \sigma_i(q\ast\Gamma(t))\biggr)^2-{\lambda_C\over2}
+\sum_{x\in X^\sharp} g_x \Bigl(\sigma_i\bigl(q\ast\Gamma(t)\bigr)
+\Bigr)^2\biggr],\eqno(5)$$
+so that ${\cal H}(q)=\int dt\, \Phi(t,q(t))$. Then the variation of this term
+gives contributes in the ELE with the term $\nabla_q\Phi(t,q)$. This term is
+highly non-linear in $q$.
+
+Euler-Lagrange equation reduces to 
+$$\eqalign{ \hat \alpha
+q^{(4)}+2\dot{\hat\alpha}q^{(3)}+(\ddot{\hat\alpha}+\dot{\hat\gamma}-\hat
+\beta-\lambda_M\hat M^\natural ) \ddot q &-\left(\dot{\hat
+\beta}-\ddot{\hat\gamma}+\lambda_M\bigl(\dot{\hat M^\natural}-\hat
+N^\natural+(\hat N^\natural)'\bigr)\right)\dot q\cr &+\left(\hat k
++\lambda_M\bigl(\hat O^\natural-(\dot{\hat N^\natural})'\bigr)
+\right)q +\nabla_q \Phi(t,q)=0.}\eqno(6)$$
+This is only apparently a linear differential equation because of the term
+$\nabla_q\Phi$.
+
+\bye
