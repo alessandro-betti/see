@@ -1,0 +1,17 @@
+Another possible model for our theory is that of setting up an autoencoder.
+
+This rises some questions:
+
+     1. The number of hidden layers has to be chosen with some care since
+        we imagine that we need an encoding and then a decoding phase;
+     2. When working on multiple layer each layer needs to have an
+     	"invariance under motion" term, also each set of weights must be
+	properly regularized.
+     3. We also might want to consider the idea of adding a mutual information
+     	term for each layer, (why should this be helpful?? Duscuss this
+	in some depth with Marco...)
+     4. We need to have non linearity: This is very IMPORTANT since otherwise
+     	everithing collapses to a single layer calculation. What kind of
+	non-linearity we should use it is not yet clear (ReLu maybe?).
+
+Write down the action and then try to do the variation!!!
