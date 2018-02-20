@@ -60,9 +60,9 @@ $$\feat_{ix}^\sharp(t):=\sigma_i\big(q\ast\Gamma(t)\big),
 \eqno(1)$$
 Notice that when $\Gamma\equiv 0$ then $\feat_{ix}^\sharp(t)=\sigma_i(0)=1/n$
 (by property 3 above). Let us also define the {\it activation function\/}
-$a_x\colon {\bf R}\to {\bf R}^n$ on the point $x$ by
-$a_x(t):=q\ast\Gamma(t)$. With this notation Eq.~(1) becomes
-$\feat_{ix}^\sharp(t)=\sigma_i(a_x(t))$.
+$a^x\colon {\bf R}\to {\bf R}^n$ on the point $x$ by
+$a^x_i(t):=(q\ast\Gamma(t))_i$. With this notation Eq.~(1) becomes
+$\feat_{ix}^\sharp(t)=\sigma_i(a^x(t))$.
 
 The functional we are now interested in is
 $${\cal A}(q)={\cal A}_0(q)+{\cal H}(q)+{\cal V}_m(q),\eqno(2)$$
@@ -93,7 +93,7 @@ this expression does not depend on the derivatives of $q$, therefore is a
 potential-like term.
 
 Define
-$$\Phi(t,q):=h(t)\biggl[{1\over2}\biggl(\sum_{x\in X^\sharp}
+$$\Phi(t,q):=h(t)\sum_{i=0}^{n-1}\biggl[{1\over2}\biggl(\sum_{x\in X^\sharp}
 g_x \sigma_i(q\ast\Gamma(t))\biggr)^2-{\lambda_C\over2}
 \sum_{x\in X^\sharp} g_x \Bigl(\sigma_i\bigl(q\ast\Gamma(t)\bigr)
 \Bigr)^2\biggr],\eqno(5)$$
@@ -112,4 +112,10 @@ N^\natural+(\hat N^\natural)'\bigr)\right)\dot q\cr &+\left(\hat k
 This is only apparently a linear differential equation because of the term
 $\nabla_q\Phi$.
 
+More explicitly we have that
+$${\partial \Phi\over\partial q_k}=\sum_{i,\ell=0}^{n-1}\sum_{j\in J_\ell}
+\sum_{x\in X^\sharp}g_x\left(\biggl(\sum_{y\in X^\sharp}
+g_y \sigma_i(q\Ast y\Gamma(t))\biggr)-\lambda_C\sigma_i(q\ast \Gamma(t))
+\right){\partial \sigma_i\over a_\ell^x}\delta_{jk}\Gamma_{T_x(j)}.
+\eqno(7)$$
 \bye
