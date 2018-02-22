@@ -12,6 +12,7 @@ This rises some questions:
 	in some depth with Marco...)
      4. We need to have non linearity: This is very IMPORTANT since otherwise
      	everithing collapses to a single layer calculation. What kind of
-	non-linearity we should use it is not yet clear (ReLu maybe?).
+	non-linearity we should use it is not yet clear (ReLu maybe? And what 
+	about our funnets?).
 
 Write down the action and then try to do the variation!!!
