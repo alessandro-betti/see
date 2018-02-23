@@ -1,0 +1,10 @@
+Giovanni pointed out that the in our argument the blurring actually depends
+on the variable q(t) and on the derivatives
+
+Marco pointed out that
+
+1. The variation of the action with the rescaled video \rho(q(t),...) is
+   different from 0 only on a finite number of point in which the
+   commutation happens.
+
+
