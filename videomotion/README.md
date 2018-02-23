@@ -27,7 +27,7 @@ Options can be:
 Other options have been added to modify the values of the hyperparamenters:
 --k, --alpha, --theta, --beta, --gamma, --eta, --eps1, --eps2,...
 
-### Example of command line
+### Examples of command line
 	python vprocessor.py --run data/skater.avi --out exp/skater --m 3 --f 3 --gray 1 --res 100x80
 
 	python vprocessor.py --run data/skater.avi --out exp/skater --m 10 --f 3 --gray 1 --res 100x80 --theta 0.00001 --k 100 --beta 3000 --gamma=20000000000 --alpha 10000000 --rep 100000
