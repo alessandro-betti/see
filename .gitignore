@@ -18,6 +18,7 @@
 *.ref
 *.note
 *.pyc
+*.private
 data
 exp
 

@@ -1,0 +1,58 @@
+An (im)possible Lullaby differential equation
+
+Let us consider the differential equation
+    q^{(4)}(t)+2 q^{(3)}(t)+3 q^{(2)}(t)+ 2q^{(1)}(t)+2 q(t)=0,
+with initial conditions
+    q(0)=1,  q^{(1)}(0)=0,  q^{(2)}(0)=0,  q^{(3)}(0)=0.
+
+This equation has a unique solution:
+            3 cos(t) + 2 e^t  cos(t) - sin(t) + 4 e^t  sin(t)
+    q(t) =  -------------------------------------------------  .
+                                5 e^t
+Notice that as t\to\infty the solution reduces to 2/5 cos(t) +
+4/5 sin(t); all other modes are exponentially suppressed (form
+a practical point of view by the time that t=5 the two functions are
+indistinguishable).
+
+			       *   *   *
+
+A possible Lullaby differential equation
+
+It also seems that there is a mistake in the derivation of Eq.~(35) of
+our report (arXiv:1801.07110). This morning I have repeated the
+calculations and it turns out that in the previous results I have
+missed an \alpha in the coefficient of q^{(2)}. Apparently on my
+first, and in the subsequent checks of this derivation I tested the
+condition on the wrong equation which has the term (\theta^2
++\theta\gamma-\beta)q^{(2)} instead of (\theta^2\alpha +\theta\gamma
+-\beta)q^{(2)} as it should be. This are the modified conditions that
+I have found this morning:
+                                       \beta 
+    \theta > 0,  \beta > 0,   \gamma > ------,  \alpha > 0,  k>0,
+                                       \theta
+				       
+	(\beta - \gamma \theta) (\beta - \theta (\gamma + 2 \alpha \theta))
+    k < ------------------------------------------------------------------- .
+                                     4 \alpha
+These new conditions are actually very similar to the ones we had
+found previously and all the remarks we made in the report seems to
+hold true also here: For example even if we now have an upper bound on
+k, we are still free to choose k big as we want as long as we pick an
+\alpha that is small enough.
+
+This conditions are satisfied for example when \alpha=k=1/2, \gamma=2
+and \theta=\beta=1. In this case the resulting differential equation
+is
+    q^{(4)}(t)+2 q^{(3)}(t)+3 q^{(2)}(t)+ 2q^{(1)}(t)+ q(t)=0.
+Notice that there is a ``1'' in front of q instead of a ``2''.
+Using the same initial conditions as before the solution is
+             e^{-t/2}          \sqrt{3} t            \sqrt{3} t
+    q(t) =   --------  ( 9 cos(----------) - 3 t cos(----------)  
+                9                  2                     2
+ 
+                                 \sqrt{3} t                     \sqrt{3} t     
+                 +5 \sqrt{3} sin[----------] + 3 \sqrt{3} t sin[----------]). 
+                                      2                             2 
+This solution is indeed stable.
+
+-- A.B., 29 January 2018
