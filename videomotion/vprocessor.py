@@ -1,6 +1,7 @@
 import os
 import sys
 import getopt
+#Import some definitions from modules 
 from streams import InputStream, OutputStream
 from worker import Worker
 from utils import out, err, warn
