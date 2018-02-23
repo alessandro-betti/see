@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Processor</title>
+
+    <link rel="stylesheet" type="text/css" href="style.css">
+
+    <script src="jquery-3.2.1.min.js"></script>
+    <script src="jquery-ajax-blob-arraybuffer.js"></script>
+    <script src="utils.js"></script>
+
+    <script language="JavaScript">
+
+        // last inserted table cell
+        var _row = 0;
+        var _col = 0;
+        var _last_td_id = '';
+        var _max_cols = 2; // option
+        var _caption2CanvasContext = [];
+        var _playThread;
+        var _error = false;
+        var _features = 0;
+        var _visu_changed = false;
+        var _feature_range_text = '';
+        var _canvas_to_draw_count = 0;
+        var _w = 0;
+        var _h = 0;
+        var _rho = 1.0;
+
+        // add a new canvas to the main table or return an already created one
+        function get_canvas(caption, w, h) {
+            var ctx = _caption2CanvasContext[caption];
+
+            if (ctx === undefined) {
+                if (_col == _max_cols || _col == 0) {
+                    _row = _row + 1;
+                    _col = 1;
+                    _last_td_id = "td" + ((_row - 1) * 2 + _col);
+                    var canvas_id = "canvas" + ((_row - 1) * 2 + _col);
+                    $('#main_table').append('<tr><td><canvas width="100%" height="100%" id="' + canvas_id + '"/><br/>'
+                        + caption + '</td><td id="' + _last_td_id + '"></td></tr>');
+                } else {
+                    _col = _col + 1;
+                    var canvas_id = "canvas" + ((_row - 1) * 2 + _col);
+                    $('#' + _last_td_id).html('<canvas width="100%" height="100%" id="' + canvas_id + '"/><br/>'
+                        + caption);
+                }
+
+                ctx = document.getElementById(canvas_id).getContext('2d');
+                ctx.canvas.width = w;
+                ctx.canvas.height = h;
+
+                _caption2CanvasContext[caption] = ctx;
+
+                return ctx;
+            } else {
+                return ctx;
+            }
+        }
+
+        function reset_all_canvas() {
+            _caption2CanvasContext = [];
+            _row = 0;
+            _col = 0;
+            _canvas_to_draw_count = 0;
+            document.getElementById('main_table').innerHTML = "<tbody></tbody>";
+        }
+
+        function get_params() {
+            var fps = parseInt($('#text_fps').val());
+            var frame = parseInt($('#text_cur_frame').val());
+            var tot_frames = parseInt($('#text_frames').val());
+            var showVideo = $('#checkbox_video').is(':checked');
+            var showMotion = $('#checkbox_motion').is(':checked');
+            var showFeatures = $('#checkbox_features').is(':checked');
+            var showFilters = $('#checkbox_filters').is(':checked');
+            var normalizeFeatures = $('#checkbox_features_normalization').is(':checked');
+            var motionMap = $('#checkbox_motion_map').is(':checked');
+
+            var ret = {
+                fps: fps,
+                frame: frame,
+                tot_frames: tot_frames,
+                showVideo: showVideo,
+                showMotion: showMotion,
+                showFeatures: showFeatures,
+                showFilters: showFilters,
+                normalizeFeatures: normalizeFeatures,
+                motionMap: motionMap
+            };
+
+            return ret;
+        }
+
+        function do_action(action, innerCall) {
+            console.log("ACTION: " + action);
+            params = get_params();
+
+            if (_visu_changed == true) {
+                _visu_changed = false;
+                reset_all_canvas();
+            }
+
+            if (action == 'refresh') {
+                if (params.showVideo) {
+                    get_and_draw_frame(params.frame);
+                }
+                if (params.showMotion) {
+                    if (params.motionMap) {
+                        get_and_draw_motion_map(params.frame);
+                    } else {
+                        get_and_draw_motion_lines(params.frame);
+                    }
+                }
+                if (params.showFilters) {
+                    if (params.normalizeFeatures) {
+                        get_and_draw_filters(params.frame, true)
+                    } else {
+                        get_and_draw_filters(params.frame, false)
+                    }
+                }
+                if (params.showFeatures) {
+                    var range_array = $('#text_features_range').val().split("-");
+
+                    if (range_array.length == 2 && range_array[1].trim().length > 0) {
+                        if (params.normalizeFeatures) {
+                            get_and_draw_features(params.frame, range_array, true)
+                        } else {
+                            get_and_draw_features(params.frame, range_array, false)
+                        }
+                    }
+                }
+
+                if (params.frame == params.tot_frames) {
+                    do_action("stop");
+                }
+            } else if (action == 'prev') {
+                do_action("stop");
+                params.frame = params.frame - 1; if (params.frame == 0) params.frame = 1;
+                $('#text_cur_frame').val(params.frame);
+                do_action("refresh");
+
+            } else if (action == 'next') {
+                if (innerCall === undefined) {
+                    do_action("stop");
+                }
+                params.frame = params.frame + 1; if (params.frame > params.tot_frames) params.frame = params.tot_frames;
+                $('#text_cur_frame').val(params.frame);
+                do_action("refresh");
+
+            } else if (action == 'play') {
+                do_action("stop");
+                _playThread = setInterval(function () {
+                        if (_canvas_to_draw_count === 0) { do_action("next", true); }
+                    },
+                    (1000 / params.fps));
+
+            } else if (action == 'stop') {
+                if (_playThread !== undefined) {
+                    clearTimeout(_playThread);
+                    console.log("Stopped thread!");
+                    _playThread = undefined;
+                }
+
+            }
+        }
+
+        function get_options() {
+            console.log("Requested: options")
+            $.ajax({
+                type: "GET",
+                url: "/options",
+                success: function (byte_str) {
+                    var options = JSON.parse(byte_str);
+
+                    $('#text_frames').val(options["frames"]);
+                    $('#text_fps').val(options["fps"]);
+                    $('#text_resolution').val(options["resolution"]);
+                    $('#text_features_range').val("1-" + options["m"]);
+                    _features = options["features"];
+                    _w = options["w"];
+                    _h = options["h"];
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function get_rho(frame) {
+            console.log("Requested: others")
+            $.ajax({
+                type: "GET",
+                url: "/others",
+                data: {
+                    frame: frame
+                },
+                success: function (byte_str) {
+                    var others = JSON.parse(byte_str);
+                    _rho = others['rho'] * (1.0 - others['is_night'])
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function get_and_draw_frame(frame) {
+            console.log("Requested: frame");
+            get_rho(frame);
+            _canvas_to_draw_count++;
+            var ctx = get_canvas("Video", _w, _h); // ensure this is immediately returned (to gain a top row position)
+            $.ajax({
+                type: "GET",
+                url: "/video",
+                dataType: "arraybuffer",
+                data: {
+                    frame: frame
+                },
+                success: function (array_buffer) {
+                    var blb = new Blob([array_buffer], {type: 'image/png'});
+                    var img = new Image();
+
+                    img.onload = function() {
+                        ctx.drawImage(img, 0, 0, img.width, img.height);
+                        var imgData = ctx.getImageData(0, 0, img.width, img.height);
+                        scalePix(imgData.data, _rho);
+                        ctx.putImageData(imgData, 0, 0);
+                        _canvas_to_draw_count--;
+                    }
+
+                    img.src = (window.URL || window.webkitURL).createObjectURL(blb);
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function get_and_draw_motion_map(frame) {
+            _canvas_to_draw_count++;
+            var ctx = get_canvas("Motion", _w, _h); // ensure this is immediately returned (to gain a top row position)
+            _get_and_draw_motion(ctx, frame, 'map');
+        }
+
+        function get_and_draw_motion_lines(frame) {
+            console.log("Requested: frame");
+            _canvas_to_draw_count++;
+            var ctx = get_canvas("Motion", _w, _h); // ensure this is immediately returned (to gain a top row position)
+            $.ajax({
+                type: "GET",
+                url: "/video",
+                dataType: "arraybuffer",
+                data: {
+                    frame: frame
+                },
+                success: function (array_buffer) {
+                    var blb = new Blob([array_buffer], {type: 'image/png'});
+                    var img = new Image();
+
+                    img.onload = function() {
+                        var ctxHidden = document.createElement('canvas').getContext('2d'); // hidden canvas
+                        ctxHidden.canvas.width = img.width;
+                        ctxHidden.canvas.height = img.height;
+                        ctxHidden.drawImage(img, 0, 0, img.width, img.height);
+                        _get_and_draw_motion(ctx, frame, 'lines',
+                            ctxHidden.getImageData(0, 0, img.width, img.height).data);
+                    }
+
+                    img.src = (window.URL || window.webkitURL).createObjectURL(blb);
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function _get_and_draw_motion(ctx, frame, draw_style, background_pixels) {
+            console.log("Requested: motion");
+            $.ajax({
+                type: "GET",
+                url: "/motion",
+                dataType: "arraybuffer",
+                data: {
+                    frame: frame
+                },
+                success: function (array_buffer) {
+                    var numPyArray = getDataFromNumPyArray(array_buffer);
+                    var w = numPyArray.w;
+                    var h = numPyArray.h;
+                    var array_of_floats = numPyArray.data;
+
+                    var imgData = ctx.createImageData(w, h);
+                    var data = imgData.data;
+
+                    var vx;
+                    var vy;
+                    var k = 0;
+
+                    if (draw_style == 'map') {
+                        var h, s, v;
+                        var rgb;
+                        var mag;
+                        var ang;
+                        var min_mag = Number.POSITIVE_INFINITY;
+                        var max_mag = Number.NEGATIVE_INFINITY;
+
+                        for (var i = 0; i < array_of_floats.length; i = i + 2) {
+                            vx = array_of_floats[i + 0];
+                            vy = array_of_floats[i + 1];
+
+                            mag = Math.sqrt(vx * vx + vy * vy);
+                            ang = Math.atan2(vy, vx) * (180 / Math.PI);
+                            if (ang < 0.0) {
+                                ang = ang + 360.0;
+                            }
+                            min_mag = Math.min(mag, min_mag);
+                            max_mag = Math.max(mag, max_mag);
+
+                            array_of_floats[i + 0] = ang; // [0,360]
+                            array_of_floats[i + 1] = mag; // [0,whatever]
+                        }
+
+                        max_mag = max_mag - min_mag;
+
+                        for (var i = 0; i < array_of_floats.length; i = i + 2) {
+                            h = array_of_floats[i + 0] / 360.0; // [0,1]
+                            s = 1.0; // [0,1]
+                            v = ((array_of_floats[i + 1] - min_mag) / max_mag); // [0,1]
+                            v = Math.max(Math.min(v, 1.0), 0.0); // ensure [0,1]
+
+                            rgb = hsvToRgb(h, s, v);
+
+                            data[k + 0] = rgb[0]; // R
+                            data[k + 1] = rgb[1]; // G
+                            data[k + 2] = rgb[2]; // B
+                            data[k + 3] = 255; // A
+                            k = k + 4;
+                        }
+
+                        ctx.putImageData(imgData, 0, 0);
+                        _canvas_to_draw_count--;
+
+                    } else if (draw_style == 'lines') {
+
+                        if (background_pixels !== undefined) {
+                            copyAndGoGrayscale(data, background_pixels);
+                        } else {
+                            goBlack(data);
+                        }
+
+                        ctx.putImageData(imgData, 0, 0);
+                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineCap = 'butt';
+
+                        var step_size = 16;
+                        var w2 = 2*w;
+                        var p2 = 2*Math.PI;
+                        var offset;
+
+                        for (var y = 0; y < h; y = y + step_size) {
+                            offset = y*w2;
+                            for (var x = 0; x < w; x = x + step_size) {
+                                vx = array_of_floats[offset + 2*x + 0];
+                                vy = array_of_floats[offset + 2*x + 1];
+
+                                ctx.beginPath();
+                                ctx.moveTo(x,y);
+                                ctx.lineTo(Math.max(Math.min(Math.floor(x + vx),w),0),
+                                    Math.max(Math.min(Math.floor(y + vy),h),0));
+                                ctx.stroke();
+
+                                ctx.beginPath();
+                                ctx.arc(x,y,1,0,p2);
+                                ctx.stroke();
+                            }
+                        }
+
+                        _canvas_to_draw_count--;
+                    }
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function get_and_draw_features(frame, range, normalize) {
+            console.log("Requested: features");
+            _canvas_to_draw_count++;
+            $.ajax({
+                type: "GET",
+                url: "/features",
+                dataType: "arraybuffer",
+                data: {
+                    frame: frame
+                },
+                success: function (array_buffer) {
+                    var numPyArray = getDataFromNumPyArray(array_buffer);
+                    var w = numPyArray.w;
+                    var h = numPyArray.h;
+                    var c = numPyArray.c;
+                    var whc = w * h * c;
+                    var array_of_floats = numPyArray.data;
+
+                    var from = 1;
+                    var to = c;
+
+                    if (range[0] >= from && range[0] <= to) {
+                        from = range[0];
+                    }
+                    if (range[1] >= from && range[1] <= to) {
+                        to = range[1];
+                    }
+                    if (from > to) {
+                        var tmp = from;
+                        from = to;
+                        to = tmp;
+                    }
+
+                    for (var f = from; f <= to; f++) {
+                        var ctx = get_canvas("Feature " + f, w, h);
+                        var imgData = ctx.createImageData(w, h);
+                        var data = imgData.data;
+
+                        var val;
+                        var k = 0;
+
+                        var min_val = Number.POSITIVE_INFINITY;
+                        var max_val = Number.NEGATIVE_INFINITY;
+
+                        if (normalize == false) {
+                            for (var i = f - 1; i < whc; i = i + c) {
+                                val = 255.0 * Math.max(0.0,Math.min(1.0,array_of_floats[i]));
+
+                                data[k + 0] = val; // R
+                                data[k + 1] = val; // G
+                                data[k + 2] = val; // B
+                                data[k + 3] = 255; // A
+                                k = k + 4;
+                            }
+                        } else {
+                            for (var i = f - 1; i < whc; i = i + c) {
+                                val = array_of_floats[i];
+
+                                min_val = Math.min(val, min_val);
+                                max_val = Math.max(val, max_val);
+                            }
+
+                            max_val = max_val - min_val;
+
+                            for (var i = f - 1; i < whc; i = i + c) {
+                                val = 255 * ((array_of_floats[i] - min_val) / (max_val));
+
+                                data[k + 0] = val; // R
+                                data[k + 1] = val; // G
+                                data[k + 2] = val; // B
+                                data[k + 3] = 255; // A
+                                k = k + 4;
+                            }
+                        }
+
+                        ctx.putImageData(imgData, 0, 0);
+                    }
+                    _canvas_to_draw_count--;
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        function get_and_draw_filters(frame, normalize) {
+            console.log("Requested: filters");
+            _canvas_to_draw_count++;
+            $.ajax({
+                type: "GET",
+                url: "/filters",
+                dataType: "arraybuffer",
+                data: {
+                    frame: frame
+                },
+                success: function (array_buffer) {
+                    var numPyArray = getDataFromNumPyArray(array_buffer);
+                    var f2 = numPyArray.c;
+                    var n = numPyArray.w;
+                    var m = numPyArray.h;
+                    var upscale = 10;
+                    var f = Math.sqrt(f2);
+                    var vol = f2 * n;
+                    var array_of_floats = numPyArray.data;
+
+                    /*console.log("---------------");
+                    var a = "[[";
+                    for (var u = 0; u < array_of_floats.length; u = u + 1) {
+                        if ((u % vol) < (vol - 1))
+                            a = a + array_of_floats[u] + ","
+                        else {
+                            if (u < array_of_floats.length - 1)
+                                a = a + array_of_floats[u] + "];[";
+                            else
+                                a = a + array_of_floats[u] + "]";
+                        }
+                    }
+                    a = a + "]"
+                    console.log(a);*/
+
+                    var canvas_w = upscale * f * n + (n + 1);
+                    var canvas_h = upscale * f * m + (m + 1);
+
+                    var ctx = get_canvas("Filters", canvas_w,  canvas_h);
+                    var imgData = ctx.createImageData(canvas_w,  canvas_h);
+                    var data = imgData.data;
+
+                    var val;
+                    var k = 0;
+                    var offset = 0;
+                    var k_start = 0;
+
+                    var min_val = Number.POSITIVE_INFINITY;
+                    var max_val = Number.NEGATIVE_INFINITY;
+
+                    goRed(data);
+
+                    if (normalize == false) {
+                        for (var filter = 0; filter < m; filter = filter + 1) {
+                            for (var input_slice = 0; input_slice < n; input_slice = input_slice + 1) {
+                                offset = filter * vol + f2 * input_slice;
+                                k_start = ((filter) * (upscale * f + 1) * canvas_w + (upscale * f + 1) * input_slice) * 4;
+                                k = k_start;
+
+                                // red upper row
+                                for (var j = 0; j < upscale * f + 2; j = j + 1) {
+                                    data[k + 0] = 255;
+                                    data[k + 1] = 0;
+                                    data[k + 2] = 0;
+                                    data[k + 3] = 255;
+                                    k = k + 4;
+                                }
+                                k_start = k_start + canvas_w * 4;
+                                k = k_start;
+
+                                // filter rows (starting with green pixel)
+                                for (var jj = 0; jj < f; jj = jj + 1) {
+                                    var offset_start = offset;
+
+                                    for (var a = 0; a < upscale; a = a + 1) {
+                                        offset = offset_start;
+
+                                        data[k + 0] = 0;
+                                        data[k + 1] = 255;
+                                        data[k + 2] = 0;
+                                        data[k + 3] = 255;
+                                        k = k + 4;
+
+                                        for (var j = 0; j < f; j = j + 1) {
+                                            val = 255.0 * (2.5 * Math.max(0.0, Math.min(0.4, 0.2 + array_of_floats[offset])));
+                                            offset = offset + 1;
+
+                                            for (var u = 0; u < upscale; u = u + 1) {
+                                                data[k + 0] = val;
+                                                data[k + 1] = val;
+                                                data[k + 2] = val;
+                                                data[k + 3] = 255;
+                                                k = k + 4;
+                                            }
+                                        }
+
+                                        data[k + 0] = 0;
+                                        data[k + 1] = 255;
+                                        data[k + 2] = 0;
+                                        data[k + 3] = 255;
+
+                                        k_start = k_start + canvas_w * 4;
+                                        k = k_start;
+                                    }
+                                }
+
+                                // red bottom row
+                                for (var j = 0; j < upscale * f + 2; j = j + 1) {
+                                    data[k + 0] = 255;
+                                    data[k + 1] = 0;
+                                    data[k + 2] = 0;
+                                    data[k + 3] = 255;
+                                    k = k + 4;
+                                }
+                            }
+                        }
+                    } else {
+                        for (var filter = 0; filter < m; filter = filter + 1) {
+                            for (var input_slice = 0; input_slice < n; input_slice = input_slice + 1) {
+                                offset = filter * vol + f2 * input_slice;
+                                k_start = ((filter) * (upscale * f + 1) * canvas_w + (upscale * f + 1) * input_slice) * 4;
+                                k = k_start;
+
+                                // red upper row
+                                for (var j = 0; j < upscale * f + 2; j = j + 1) {
+                                    data[k + 0] = 255;
+                                    data[k + 1] = 0;
+                                    data[k + 2] = 0;
+                                    data[k + 3] = 255;
+                                    k = k + 4;
+                                }
+                                k_start = k_start + canvas_w * 4;
+                                k = k_start;
+
+                                // getting bounds
+                                min_val = Number.POSITIVE_INFINITY;
+                                max_val = Number.NEGATIVE_INFINITY;
+                                var offset2 = offset;
+                                for (var jj = 0; jj < f; jj = jj + 1) {
+                                    for (var j = 0; j < f; j = j + 1) {
+                                        val = array_of_floats[offset2];
+                                        min_val = Math.min(val, min_val);
+                                        max_val = Math.max(val, max_val);
+                                        offset2 = offset2 + 1;
+                                    }
+                                }
+                                max_val = max_val - min_val;
+
+                                // filter rows (starting with green pixel)
+                                for (var jj = 0; jj < f; jj = jj + 1) {
+                                    var offset_start = offset;
+                                    for (var a = 0 ; a < upscale; a = a + 1) {
+                                        offset = offset_start;
+
+                                        data[k + 0] = 0;
+                                        data[k + 1] = 255;
+                                        data[k + 2] = 0;
+                                        data[k + 3] = 255;
+                                        k = k + 4;
+
+                                        for (var j = 0; j < f; j = j + 1) {
+                                            val = 255 * ((array_of_floats[offset] - min_val) / (max_val));
+                                            offset = offset + 1;
+
+                                            for (var u = 0; u < upscale; u = u + 1) {
+                                                data[k + 0] = val;
+                                                data[k + 1] = val;
+                                                data[k + 2] = val;
+                                                data[k + 3] = 255;
+                                                k = k + 4;
+                                            }
+                                        }
+
+                                        data[k + 0] = 0;
+                                        data[k + 1] = 255;
+                                        data[k + 2] = 0;
+                                        data[k + 3] = 255;
+
+                                        k_start = k_start + canvas_w * 4;
+                                        k = k_start;
+                                    }
+                                }
+
+                                // red bottom row
+                                for (var j = 0; j < upscale * f + 2; j = j + 1) {
+                                    data[k + 0] = 255;
+                                    data[k + 1] = 0;
+                                    data[k + 2] = 0;
+                                    data[k + 3] = 255;
+                                    k = k + 4;
+                                }
+                            }
+                        }
+                    }
+
+                    ctx.putImageData(imgData, 0, 0);
+                    _canvas_to_draw_count--;
+                },
+                error: function (result) {
+                    if (!_error) {
+                        _error = true;
+                        do_action("stop");
+                        alert("Error while receiving data from server");
+                    }
+                }
+            });
+        };
+
+        window.onload = function() {
+            get_options();
+
+            $('#text_cur_frame').bind('keyup', function () {
+                if ($('#text_cur_frame').val().trim().length > 0) {
+                    var value = Number($('#text_cur_frame').val());
+                    if (isNaN(value) || value != Math.floor(value)) {
+                        $('#text_cur_frame').val("1");
+                    } else {
+                        if (value <= 0) {
+                            $('#text_cur_frame').val("1");
+                        } else {
+                            if (value > $('#text_frames').val()) {
+                                $('#text_cur_frame').val($('#text_frames').val());
+                            }
+                        }
+                    }
+                }
+            });
+
+            $('#text_fps').bind('keyup', function () {
+                if ($('#text_fps').val().trim().length > 0) {
+                    var value = Number($('#text_fps').val());
+                    if (isNaN(value)) {
+                        $('#text_fps').val("1.0");
+                    } else {
+                        if (value <= 0) {
+                            $('#text_fps').val("1.0");
+                        }
+                    }
+                }
+            });
+
+            $('#text_features_range').bind('focusout', function () {
+                if ($('#text_features_range').val().trim().length > 0) {
+                    var range_array = $('#text_features_range').val().trim().split("-");
+
+                    if (range_array.length == 2) {
+                        var value1 = Number(range_array[0]);
+                        var value2 = Number(range_array[1]);
+                        if (isNaN(value1)) {
+                            value1 = 1;
+                        } else {
+                            if (value1 <= 0) {
+                                value1 = 1;
+                            }
+                            if (value1 > _features) {
+                                value1 = _features;
+                            }
+                        }
+                        if (isNaN(value2)) {
+                            value2 = 1;
+                        } else {
+                            if (value2 <= 0) {
+                                value2 = 1;
+                            }
+                            if (value2 > _features) {
+                                value2 = _features;
+                            }
+                        }
+                        if (value1 > value2) {
+                            var tmp = value1;
+                            value1 = value2;
+                            value2 = tmp;
+                        }
+                        $('#text_features_range').val(value1 + "-" + value2);
+                    } else {
+                        $('#text_features_range').val("1-1");
+                    }
+
+                    if ($('#text_features_range').val() != _feature_range_text) {
+                        _visu_changed = true;
+                    }
+
+                    _feature_range_text = $('#text_features_range').val();
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+<form>
+    Frame: <input type="text" id="text_cur_frame" value="1"/>/<input type="text" id="text_frames" readonly/>
+    <input type="button" id="button_prev" value="<< Previous" onclick="{ _error = false; do_action('prev'); }"/>
+    <input type="button" id="button_refresh" value="Refresh" onclick="{ _error = false; do_action('refresh'); }"/>
+    <input type="button" id="button_next" value="Next >>" onclick="{ _error = false; do_action('next'); }"/>
+    <input type="button" id="button_play" value="Play" onclick="{ _error = false; do_action('play'); }"/>
+    <input type="button" id="button_stop" value="Stop" onclick="{ _error = false; do_action('stop'); }"/>
+    <br/>
+    Resolution: <input type="text" id="text_resolution" readonly/>
+    Fps: <input type="text" id="text_fps"/>
+    <br/>
+    Show:
+    <input type="checkbox" id="checkbox_video" checked onclick="{ _visu_changed = true; }">Video
+    <input type="checkbox" id="checkbox_motion" checked onclick="{ _visu_changed = true; }">Motion
+    <input type="checkbox" id="checkbox_features" checked onclick="{ _visu_changed = true; }">Features
+    <input type="checkbox" id="checkbox_filters" checked onclick="{ _visu_changed = true; }">Filters
+    <br/>
+    Features: <input type="text" id="text_features_range" value="1-1"/>
+    <input type="checkbox" id="checkbox_features_normalization" checked onclick="{ _visu_changed = true; }">Min-Max Features/Filters
+    <input type="checkbox" id="checkbox_motion_map" checked onclick="{ _visu_changed = true; }">Motion Map
+</form>
+<table class="tableStyle" id="main_table">
+<tbody>
+</tbody>
+</table>
+</body>
+</html>

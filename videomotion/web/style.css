@@ -1,0 +1,29 @@
+table.tableStyle {
+  width: 500px;
+  text-align: center;
+  border-collapse: collapse;
+}
+table.tableStyle td, table.tableStyle th {
+  padding: 8px 4px;
+}
+table.tableStyle tbody td {
+  font-size: 13px;
+  font-weight: bold;
+}
+table.tableStyle tr:nth-child(even) {
+  background: #FFFFFF;
+}
+table.tableStyle tfoot td {
+  font-size: 14px;
+  font-weight: bold;
+}
+table.tableStyle tfoot .links {
+  text-align: right;
+}
+table.tableStyle tfoot .links a{
+  display: inline-block;
+  background: #1C6EA4;
+  color: #FFFFFF;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
