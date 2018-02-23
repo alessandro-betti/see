@@ -8,7 +8,7 @@ from utils import out, err, warn
 from visuserver import VisualizationServer
 import json
 
-
+#This is the main program
 def main(filename, file_dir, arguments):
 
     # let's print some stuff to debug the provided argument :)
@@ -69,7 +69,9 @@ def main(filename, file_dir, arguments):
     step_adapt = False
     save_scores_only = False
 
-    # getting options from command line arguments
+    #Now we start to process the command line.
+    
+    #Getting options from command line arguments
     if arguments is not None and len(arguments) > 0:
         try:
             opts, args = getopt.getopt(arguments, "", ["resume=", "run=", "pre=", "out=", "res=", "fps=", "frames=",
