@@ -25,7 +25,8 @@ Options can be:
 * --init_fixed <number>: Initialize the filters all to the same <number> value;
 
 Other options have been added to modify the values of the hyperparamenters:
---k, --alpha, --theta, --beta, --gamma, --eta, --eps1, --eps2,...
+
+	--k <number> --alpha <number> --theta <number> --beta <number> --gamma <number> --eta <number> --eps1 <number> --eps2 <number>...
 
 ### Examples of command line
 	python vprocessor.py --run data/skater.avi --out exp/skater --m 3 --f 3 --gray 1 --res 100x80
