@@ -72,7 +72,10 @@ def main(filename, file_dir, arguments):
     #Now we start to process the command line.
     
     #Getting options from command line arguments
+    #QQQ:Why does we are using "is not None"?
     if arguments is not None and len(arguments) > 0:
+        # If there are arguments parse the command line, if something unexpected comes up,
+        #launch the "usage" function with approptiate usage message
         try:
             opts, args = getopt.getopt(arguments, "", ["resume=", "run=", "pre=", "out=", "res=", "fps=", "frames=",
                                                        "gray=",
@@ -86,9 +89,11 @@ def main(filename, file_dir, arguments):
             usage(filename)
             sys.exit(2)
     else:
+        #otherwise launch directly the usage function.
         usage(filename)
         sys.exit(2)
 
+    #Now for the real processing of the command line we match the specified arguments with the corresponding variables.
     try:
         for opt, arg in opts:
             if opt == '--run':
@@ -217,9 +222,11 @@ def main(filename, file_dir, arguments):
     out()
 
     # opening the input stream
+    #QQQ: What is InputStream? Where this comes from?
     input_stream = InputStream(input_file or input_folder, input_is_video)
 
     # checking option-related errors (given the information acquired from the input stream)
+    #QQQ: What are this checks/ assignments?
     try:
         if fps != -1 and input_stream.fps < fps:
             raise ValueError("Video FPS: " + input_stream.fps + ", requested FPS: " + fps)
@@ -271,6 +278,8 @@ def main(filename, file_dir, arguments):
         out()
 
     # setting up algorithm options
+    #Create a dictionary that consists of all the useful informations that we want to pass to the routines we
+    #write to solve the problem.
     options = {'root': os.path.abspath(output_folder),
                'm': features,
                'n': c,
@@ -307,6 +316,7 @@ def main(filename, file_dir, arguments):
     out(json.dumps(options, indent=3))
     out()
 
+    #QQQ: What are these options?
     output_stream.save_option("resolution", str(w) + "x" + str(h))
     output_stream.save_option("w", str(w))
     output_stream.save_option("h", str(h))
