@@ -237,3 +237,8 @@ TSWLatexianTemp*
 
 # standalone packages
 *.sta
+
+# custom folders (data, experiments)
+./data/*
+./exp/*
+*.idea
