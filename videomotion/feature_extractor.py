@@ -353,27 +353,27 @@ class FeatureExtractor:
                                             tf.matmul(O_block, tf.get_variable("q1", dtype=precision))))
 
             # objective function
-            all_terms = self.lambdaC * ce + self.lambdaE * minus_ge + self.lambda0 * negativeness \
+            obj = self.lambdaC * ce + self.lambdaE * minus_ge + self.lambda0 * negativeness \
                 + self.lambda1 * sum_to_one + self.lambdaM * motion \
                 + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot \
                 + self.gamma * norm_q_mixed + self.k * norm_q
 
             # TensorBoard-related
-            tf.summary.scalar('rho', tf.get_variable("rho", dtype=precision))
-            tf.summary.scalar('MI', mi)
-            tf.summary.scalar('MI_REAL', mi_real)
-            tf.summary.scalar('CE', ce)
-            tf.summary.scalar('-GE', minus_ge)
-            tf.summary.scalar('SumToOne', sum_to_one)
-            tf.summary.scalar('Negativeness', negativeness)
-            tf.summary.scalar('Motion', motion)
-            tf.summary.scalar('NormQ', norm_q)
-            tf.summary.scalar("NormQDot", norm_q_dot)
-            tf.summary.scalar("NormQDotDot", norm_q_dot_dot)
-            tf.summary.scalar("NormQDotDotDot", norm_q_dot_dot_dot)
-            tf.summary.scalar("QDotQDotDot", norm_q_mixed)
-            tf.summary.scalar("isNight", it_will_be_night)
-            tf.summary.scalar("All", all_terms)
+            tf.summary.scalar('J_Rho', tf.get_variable("rho", dtype=precision))
+            tf.summary.scalar('C_MutualInformation', mi)
+            tf.summary.scalar('D_RealMutualInformation', mi_real)
+            tf.summary.scalar('E_ConditionalEntropy', ce)
+            tf.summary.scalar('F_MinusEntropy', minus_ge)
+            tf.summary.scalar('G_SumToOne', sum_to_one)
+            tf.summary.scalar('H_Negativeness', negativeness)
+            tf.summary.scalar('I_Motion', motion)
+            tf.summary.scalar('K_NormQ', norm_q)
+            tf.summary.scalar("L_NormQDot", norm_q_dot)
+            tf.summary.scalar("M_NormQDotDot", norm_q_dot_dot)
+            tf.summary.scalar("N_NormQDotDotDot", norm_q_dot_dot_dot)
+            tf.summary.scalar("O_QDotQDotDot", norm_q_mixed)
+            tf.summary.scalar("B_IsNight", it_will_be_night)
+            tf.summary.scalar("A_FullObjectiveFunction", obj)
 
             # moving-average on objective function terms
             if self._moving_avg_obj > 0.0:
@@ -382,7 +382,7 @@ class FeatureExtractor:
                                                   + tf.multiply([ce, minus_ge, mi, mi_real, sum_to_one,
                                                                  negativeness, motion, norm_q,
                                                                  norm_q_dot, norm_q_dot_dot,
-                                                                 norm_q_mixed, all_terms], self._moving_avg_obj))
+                                                                 norm_q_mixed, obj], self._moving_avg_obj))
 
                 ce = obj_values_normalized[0]
                 minus_ge = obj_values_normalized[1]
@@ -395,7 +395,7 @@ class FeatureExtractor:
                 norm_q_dot = obj_values_normalized[8]
                 norm_q_dot_dot = obj_values_normalized[9]
                 norm_q_mixed = obj_values_normalized[10]
-                all_terms = obj_values_normalized[11]
+                obj = obj_values_normalized[11]
 
             # masked derivative of the term "w_s" (frame_patches is: wh x filter_volume)
             nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
@@ -533,7 +533,7 @@ class FeatureExtractor:
                    out_filters_map,
                    mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot,
                    norm_q_dot_dot,
-                   norm_q_mixed, all_terms,
+                   norm_q_mixed, obj,
                    up_night,
                    up_rho,
                    summary_ops,

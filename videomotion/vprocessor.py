@@ -30,7 +30,7 @@ def main(filename, file_dir, arguments):
     h = -1
     fps = -1
     force_gray = False
-    visu_port = 0
+    visualization_port = 0
 
     features = 4  # number of features
     filter_size = 3  # "edge" size of a filter, i.e., the area is filter_size x filter_size
@@ -187,7 +187,7 @@ def main(filename, file_dir, arguments):
             elif opt == '--resume':
                 resume = int(arg)
             elif opt == '--port':
-                visu_port = int(arg)
+                visualization_port = int(arg)
             elif opt == '--all_black':
                 all_black = int(arg)
             elif opt == '--init_fixed':
@@ -282,7 +282,8 @@ def main(filename, file_dir, arguments):
     # opening a visualization service (random port)
     visualization_server = None
     if not save_scores_only:
-        visualization_server = VisualizationServer(visu_port, os.path.abspath(file_dir + os.sep + "web"), output_folder)
+        visualization_server = VisualizationServer(visualization_port,
+                                                   os.path.abspath(file_dir + os.sep + "web"), output_folder)
         out('[Visualization Server]')
         out('- IP: ' + str(visualization_server.ip))
         out('- Port: ' + str(visualization_server.port))
