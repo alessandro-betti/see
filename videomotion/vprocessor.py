@@ -31,12 +31,10 @@ def main(filename, file_dir, arguments):
     h = -1
     fps = -1
     force_gray = False
+    visualization_port = 0
 
-    features = 4
-    filter_size = 3
-    init_q = 0.1
-    step_size = -1
-
+    features = 4  # number of features
+    filter_size = 3  # "edge" size of a filter, i.e., the area is filter_size x filter_size
     k = 0.5   # weight of the norm of "q"
     alpha = 0.5  # weight of the norm of the second derivative q^(2)
     beta = 1.0   # weight of the norm of the first derivative q^(1)
@@ -47,50 +45,78 @@ def main(filename, file_dir, arguments):
     lambdaM = 1.0  # motion constraint
     lambdaC = 2.0  # conditional entropy
     lambdaE = 1.0  # entropy
-
     eps1 = 100000.0  # bound on the norm of the first derivative q^(1)
     eps2 = 100000.0  # bound on the norm of the second derivative q^(2)
     eps3 = 100000.0  # bound on the norm of the third derivative q^(3)
     zeta = 0.8
     eta = 0.25
+    rho = 0.0
+    init_q = 0.1
+    prob_a = -1.0  # eps-insensitive probabilistic constraint
+    prob_b = -1.0  # eps-insensitive probabilistic constraint
+
+    step_adapt = False
+    step_size = -1
 
     resume = 0
     all_black = 0
     init_fixed = 0
-
-    check_params = True
     grad = False
     day_only = False
-    rho = 0.0
-
-    prob_a = -1.0
-    prob_b = -1.0
-
-    step_adapt = False
     save_scores_only = False
+    check_params = True
+
+
 
     #Now we start to process the command line.
     
-    #Getting options from command line arguments
+    # Getting options from command line arguments
+    accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
+                        "gray=", "f=", "m=", "init_q=", "theta=", "alpha=", "beta=",
+                        "k=", "gamma=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
+                        "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
+                        "step_size=", "all_black=", "init_fixed=", "check_params=",
+                        "grad=", "rho=", "day_only=", "probA=", "probB=",
+                        "step_adapt=", "save_scores_only="]
+    description = ["port of the visualization service", "resume an experiment (binary flag)",
+                   "none", "none", "input resolution (example: 240x120)",
+                   "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
+                   "edge of a filter (example for a 3x3 filter: 3)", "number of features",
+                   "maximum absolute value of initial components of q",
+                   "exp(theta x t)", "weight of the norm of the second derivative of q",
+                   "weight of the norm of the first derivative of q", "weight of the norm of q",
+                   "weight of the mixed-product first-second derivatives", "weight of the positivity constraint",
+                   "weight of the sum-to-1 constraint", "weight of the conditional entropy",
+                   "weight of the entropy", "weight of the motion constraint",
+                   "number of video repetitions",
+                   "bound on the norm of the first derivative of q",
+                   "bound on the norm of the second derivative of q",
+                   "bound on the norm of the third derivative of q",
+                   "norm-bounds scaling factor during night",
+                   "update factor for parameter rho",
+                   "size of the step in the Euler's method (or learning rate in the gradient-based update)",
+                   "force input to be all black",
+                   "initialize all the components of q to init_q",
+                   "check validity of the alpha, beta, gamma, theta, and k parameters (binary flag)",
+                   "switch to online stochastic gradient (binary flag)",
+                   "blurring factor",
+                   "force the system to work only in day-mode",
+                   "lower bound of the bound-based probabilistic constraint",
+                   "upper bound of the bound-based probabilistic constraint",
+                   "use adaptive step_size (binary flag)",
+                   "do not save output data, with the exception of the scalar scores (binary flag)"]
+
     #QQQ:Why does we are using "is not None"?
     if arguments is not None and len(arguments) > 0:
         # If there are arguments parse the command line, if something unexpected comes up,
         #launch the "usage" function with approptiate usage message
         try:
-            opts, args = getopt.getopt(arguments, "", ["resume=", "run=", "pre=", "out=", "res=", "fps=", "frames=",
-                                                       "gray=",
-                                                       "f=", "m=", "init_q=", "theta=", "alpha=", "beta=",
-                                                       "k=", "gamma=", "lambda1=", "lambdaC=", "lambdaM=", "lambda0=",
-                                                       "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
-                                                       "step_size=", "all_black=", "init_fixed=", "check_params=",
-                                                       "lambdaE=", "grad=", "rho=", "day_only=", "probA=", "probB=",
-                                                       "step_adapt=", "save_scores_only="])
+            opts, args = getopt.getopt(arguments, "", accepted_options)
         except getopt.GetoptError:
-            usage(filename)
+            usage(filename, accepted_options, description)
             sys.exit(2)
     else:
-        #otherwise launch directly the usage function.
-        usage(filename)
+        usage(filename, accepted_options, description)
         sys.exit(2)
 
     #Now for the real processing of the command line we match the specified arguments with the corresponding variables.
@@ -108,12 +134,6 @@ def main(filename, file_dir, arguments):
                 else:
                     raise IOError("Cannot open: " + arg)
                 action = 'run'
-            if opt == '--pre':
-                if os.path.isfile(arg):
-                    input_file = os.path.abspath(arg)
-                else:
-                    raise IOError("Cannot open: " + arg)
-                action = 'pre-process'
             elif opt == '--out':
                 output_folder = os.path.abspath(arg)
                 if output_folder.endswith(os.sep):
@@ -175,6 +195,8 @@ def main(filename, file_dir, arguments):
                 prob_b = float(arg)
             elif opt == '--resume':
                 resume = int(arg)
+            elif opt == '--port':
+                visualization_port = int(arg)
             elif opt == '--all_black':
                 all_black = int(arg)
             elif opt == '--init_fixed':
@@ -196,7 +218,7 @@ def main(filename, file_dir, arguments):
         sys.exit(1)
 
     if len(output_folder) == 0:
-        usage(filename)
+        usage(filename, accepted_options, description)
         sys.exit(2)
 
     # fixing/forcing options
@@ -255,6 +277,7 @@ def main(filename, file_dir, arguments):
     except ValueError as e:
         err(e)
         sys.exit(1)
+    tot_frames = frames * repetitions
 
     # printing input stream information
     out('[Input Stream Info]')
@@ -269,8 +292,10 @@ def main(filename, file_dir, arguments):
     output_stream = OutputStream(output_folder, resume == 0 and (input_is_video or input_folder != output_folder))
 
     # opening a visualization service (random port)
+    visualization_server = None
     if not save_scores_only:
-        visualization_server = VisualizationServer(8888, os.path.abspath(file_dir + os.sep + "web"), output_folder)
+        visualization_server = VisualizationServer(visualization_port,
+                                                   os.path.abspath(file_dir + os.sep + "web"), output_folder)
         out('[Visualization Server]')
         out('- IP: ' + str(visualization_server.ip))
         out('- Port: ' + str(visualization_server.port))
@@ -321,55 +346,31 @@ def main(filename, file_dir, arguments):
     output_stream.save_option("resolution", str(w) + "x" + str(h))
     output_stream.save_option("w", str(w))
     output_stream.save_option("h", str(h))
-    output_stream.save_option("n", str(c))
-    output_stream.save_option("m", str(features))
-    output_stream.save_option("lambda0", str(lambda0))
-    output_stream.save_option("lambda1", str(lambda1))
-    output_stream.save_option("lambdaC", str(lambdaC))
-    output_stream.save_option("lambdaM", str(lambdaM))
-    output_stream.save_option("lambdaE", str(lambdaE))
-    output_stream.save_option("step_size", str(step_size))
-    output_stream.save_option("step_adapt", str(step_adapt))
-    output_stream.save_option("f", str(filter_size))
-    output_stream.save_option("init_q", str(init_q))
-    output_stream.save_option("theta", str(theta))
-    output_stream.save_option("alpha", str(alpha))
-    output_stream.save_option("beta", str(beta))
-    output_stream.save_option("gamma", str(gamma))
-    output_stream.save_option("eps1", str(eps1))
-    output_stream.save_option("eps2", str(eps2))
-    output_stream.save_option("eps3", str(eps3))
-    output_stream.save_option("zeta", str(zeta))
-    output_stream.save_option("eta", str(eta))
-    output_stream.save_option("rho", str(rho))
-    output_stream.save_option("prob_a", str(prob_a))
-    output_stream.save_option("prob_b", str(prob_b))
-    output_stream.save_option("check_params", str(check_params))
     output_stream.save_option("fps", str(fps))
-    output_stream.save_option("frames", str(frames * repetitions))
-    output_stream.save_option("save_scores_only", str(save_scores_only))
-    output_stream.save_option("all_black", str(all_black))
-    output_stream.save_option("day_only", str(day_only))
-    output_stream.save_option("grad", str(grad))
-    output_stream.save_option("init_fixed", str(init_fixed))
+    output_stream.save_option("frames", str(tot_frames))
     output_stream.save_option("repetitions", str(repetitions))
+
+    for k, v in options.items():
+        output_stream.save_option(k, str(v))
+
     if not save_scores_only:
         output_stream.save_option("ip", str(visualization_server.ip))
         output_stream.save_option("port", str(visualization_server.port))
-        output_stream.save_option("url", "http://" + str(visualization_server.ip) + ":" + str(visualization_server.port))
+        output_stream.save_option("url", "http://" + str(visualization_server.ip) + ":"
+                                  + str(visualization_server.port))
 
     # creating the real worker
     try:
         worker = Worker(input_stream, output_stream, w, h, fps, frames, force_gray, repetitions, options, resume > 0)
     except ValueError as e:
         err(e)
-        visualization_server.close()
+        if not save_scores_only:
+            visualization_server.close()
         sys.exit(1)
 
     # main loop
     out("Operations are now starting...")
     status = True
-    tot_frames = frames * repetitions
     while status:
         try:
             #Process a frame at a time.
@@ -400,20 +401,23 @@ def main(filename, file_dir, arguments):
         visualization_server.close()
 
 
-def usage(filename):
+def usage(filename, accepted_options, description):
     out("Usage:")
     out()
     out(filename + ' --run <file/folder/0> --out <folder> [options]')
-    out(filename + ' --pre <file/0> --out <folder> [options]')
     out()
     out("where 'file' is video file, and '0' indicates the local web-cam")
     out()
-    out("Options can be:")
-    out("\t--res <number>x<number>: custom video resolution")
-    out("\t--fps <number>: custom video frame rate")
-    out("\t--frames <number>: maximum number of frames to process")
-    out("\t--m <number>: number of features")
-    out("\t--f <number>: filter size (e.g., 3 for 3x3 filters)")
+    out("Options can be (some descriptions will be added soon):")
+    i = 0
+    for k in accepted_options:
+        if i < len(description):
+            if description[i] != "none":
+                tab = (18 - len(k[:-1])) * " "
+                out("   --" + k[:-1] + ":" + tab + description[i])
+        else:
+            out("   --" + k[:-1])
+        i = i + 1
     out()
 
 

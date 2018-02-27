@@ -10,7 +10,7 @@ import json
 
 
 class InputStream:
-    files_per_folder = 100
+    files_per_folder = 100   # global parameter
 
     def __init__(self, input_element, input_is_video):
         self.input = input_element
@@ -70,7 +70,8 @@ class InputStream:
             ret_val, img = self.__video_capture.read()
 
             if not ret_val:
-                if self.input != "0" and fps > 0 and fps != self.fps and next_time == self.__video_capture.get(cv2.CAP_PROP_POS_MSEC):
+                if self.input != "0" and fps > 0 and \
+                        fps != self.fps and next_time == self.__video_capture.get(cv2.CAP_PROP_POS_MSEC):
                     raise IOError("Unable to capture frames from video!")
                 elif self.input != "0" and fps <= 0 and self.__video_capture.get(cv2.CAP_PROP_POS_AVI_RATIO) < 1.0:
                     raise IOError("Unable to capture frames from video!")
