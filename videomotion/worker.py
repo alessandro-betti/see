@@ -1,14 +1,14 @@
 import numpy as np
 import time
 from feature_extractor import FeatureExtractor
-from utils import err, out
+from utils import out
 import json
 
 
 class Worker:
 
     def __init__(self, input_stream, output_stream, w=-1, h=-1, fps=-1, frames=-1,
-                 force_gray=False, repetitions=1, options={}, resume=False):
+                 force_gray=False, repetitions=1, options=None, resume=False):
         self.input_stream = input_stream
         self.output_stream = output_stream
         self.w = w
@@ -94,7 +94,8 @@ class Worker:
             step_load_time = time.time() - step_load_time
 
             # extracting features
-            features, filters, mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
+            features, filters, mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, \
+                norm_q_dot_dot, \
                 norm_q_dot_dot_dot, norm_q_mixed, all_terms, is_night, \
                 next_rho = self.fe.run_step(self.__previous_img, current_img, current_of)
 
@@ -105,14 +106,16 @@ class Worker:
                 light = "day"
 
             out("\t[status=" + light + ", rho=" + str(self.__rho) + ", action_approx=" + str(all_terms)
-                + ",\n\t mi_real=" + str(mi_real) + ", mi=" + str(mi) + ", ce=" + str(ce) + ", minus_ge=" + str(minus_ge)
+                + ",\n\t mi_real=" + str(mi_real) + ", mi=" + str(mi) + ", ce=" + str(ce)
+                + ", minus_ge=" + str(minus_ge)
                 + ", sum1=" + str(sum_to_one)
                 + ", negativeness=" + str(negativeness) + ", motion=" + str(motion) + ",\n\t norm_q="
                 + str(norm_q) + ", norm_q'=" + str(norm_q_dot) + ", norm_q''=" + str(norm_q_dot_dot)
                 + ", norm_q'''=" + str(norm_q_dot_dot_dot)
                 + ", q'q''=" + str(norm_q_mixed) + "]")
 
-            others = {'mi': float(mi), 'mi_real': float(mi_real), 'ce': float(ce), 'minus_ge': float(minus_ge), 'sum_to_one': float(sum_to_one),
+            others = {'mi': float(mi), 'mi_real': float(mi_real), 'ce': float(ce), 'minus_ge': float(minus_ge),
+                      'sum_to_one': float(sum_to_one),
                       'negativeness': float(negativeness),
                       'motion': float(motion), 'norm_q': float(norm_q), 'norm_q_dot': float(norm_q_dot),
                       'norm_q_dot_dot': float(norm_q_dot_dot),
@@ -128,9 +131,9 @@ class Worker:
 
             # checking errors
             if not np.isfinite(filters).any() or np.isnan(filters).any():
-                raise ValueError("Filters contain NaNs or Infs!")
+                raise ValueError("Filters contain NaNs or Infinite!")
             if not np.isfinite(features).any() or np.isnan(features).any():
-                raise ValueError("Feature maps contain NaNs or Infs!")
+                raise ValueError("Feature maps contain NaNs or Infinite!")
 
             # save output
             step_save_time = time.time()

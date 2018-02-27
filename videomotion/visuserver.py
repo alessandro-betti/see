@@ -1,7 +1,7 @@
 import threading
 import os
-import urllib.parse
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import urllib.parse   # "urllib.parse" is missing in python 2.7
+from http.server import BaseHTTPRequestHandler, HTTPServer  # "http.server" is missing in python 2.7
 from streams import InputStream
 import sys
 import socket
@@ -35,7 +35,7 @@ def make_handler_class(html_root="web", data_root="output"):
             self.path = None
             super(Handler, self).__init__(*args, **kwargs)
 
-        def log_message(self, format, *args):
+        def log_message(self, format_, *args):
             return
 
         def do_GET(self):
