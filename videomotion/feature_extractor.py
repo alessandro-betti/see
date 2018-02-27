@@ -169,14 +169,15 @@ class FeatureExtractor:
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
+    #Here there is the actual implementation of all the quantities.
     def __build_graph(self):
 
         # TensorFlow precision
         precision = tf.float32
 
         # TensorFlow inputs
-        fed_frame_0 = tf.placeholder(precision, name="fed_frame_0")
-        fed_frame_1 = tf.placeholder(precision, name="fed_frame_1")
+        fed_frame_0 = tf.placeholder(precision, name="fed_frame_0") #Past frame
+        fed_frame_1 = tf.placeholder(precision, name="fed_frame_1") #Current frame
         fed_motion_01 = tf.placeholder(precision, name="fed_motion_01")
         fed_one_over_delta = tf.placeholder(precision, shape=(), name="fed_one_over_delta")
         t = tf.placeholder(precision, name="t")
@@ -337,6 +338,7 @@ class FeatureExtractor:
                   + self.lambda1 * sum_to_one + self.lambdaM * motion \
                   + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot + self.gamma * norm_q_mixed + self.k * norm_q
 
+            #tf,summary->tensor board
             tf.summary.scalar('rho', tf.get_variable("rho", dtype=precision))
             tf.summary.scalar('MI', mi)
             tf.summary.scalar('MI_REAL', mi_real)

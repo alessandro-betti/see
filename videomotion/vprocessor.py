@@ -223,10 +223,11 @@ def main(filename, file_dir, arguments):
 
     # opening the input stream
     #QQQ: What is InputStream? Where this comes from?
+    #InputStream is a class defined in streams.py
     input_stream = InputStream(input_file or input_folder, input_is_video)
 
     # checking option-related errors (given the information acquired from the input stream)
-    #QQQ: What are this checks/ assignments?
+    #QQQ: What are this checks/ assignments? A: Adjust some variables.
     try:
         if fps != -1 and input_stream.fps < fps:
             raise ValueError("Video FPS: " + input_stream.fps + ", requested FPS: " + fps)
@@ -316,7 +317,7 @@ def main(filename, file_dir, arguments):
     out(json.dumps(options, indent=3))
     out()
 
-    #QQQ: What are these options?
+    #QQQ: What are these options? A: save the specified options.
     output_stream.save_option("resolution", str(w) + "x" + str(h))
     output_stream.save_option("w", str(w))
     output_stream.save_option("h", str(h))
@@ -371,6 +372,7 @@ def main(filename, file_dir, arguments):
     tot_frames = frames * repetitions
     while status:
         try:
+            #Process a frame at a time.
             status, frame_time, frame_time_no_save_io, frame_time_no_io = worker.run_step()
         except ValueError as e:
             try:
@@ -415,6 +417,7 @@ def usage(filename):
     out()
 
 
+#Entry point.
 if __name__ == "__main__":
     main(os.path.basename(sys.argv[0]), os.path.dirname(os.path.abspath(sys.argv[0])), sys.argv[1:])
 #QQQ: What is this?

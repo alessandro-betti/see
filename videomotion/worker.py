@@ -4,9 +4,10 @@ from feature_extractor import FeatureExtractor
 from utils import err, out
 import json
 
-
+#QQQ: How does special methods __method-name__ works?
 class Worker:
 
+    #__init__ is the builder of the class.
     def __init__(self, input_stream, output_stream, w=-1, h=-1, fps=-1, frames=-1,
                  force_gray=False, repetitions=1, options={}, resume=False):
         self.input_stream = input_stream
@@ -32,6 +33,7 @@ class Worker:
             self.load()
 
     def close(self):
+        #QQQ: What is fe? A: is the feature extractor
         self.fe.close()
 
     def save(self):
@@ -44,7 +46,8 @@ class Worker:
             raise IOError("Cannot access: " + self.fe.save_path + ".info.txt")
         json.dump(info, f, indent=4)
         f.close()
-
+        
+    #Resume
     def load(self):
         f = open(self.fe.save_path + ".info.txt", "r")
         if f is None or not f or f.closed:
@@ -60,8 +63,10 @@ class Worker:
         current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps, self.frames, self.force_gray)
         self.__previous_img = current_img
 
+    #Main method
     def run_step(self):
 
+        #In order to process the same video multiple time we use a loop
         while True:
 
             # get time
@@ -73,6 +78,7 @@ class Worker:
             # get the frame to process at the next step and the currently needed motion field
             step_load_time = time.time()
             current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps, self.frames, self.force_gray)
+            #cuurent.of is the current optical flow
 
             # fixing the case of the first frame
             if self.__previous_img is None:
