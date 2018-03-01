@@ -6,7 +6,7 @@ from worker import Worker
 from utils import out, err, warn
 from visuserver import VisualizationServer
 import json
-# test
+
 
 def main(filename, file_dir, arguments):
 
@@ -53,6 +53,7 @@ def main(filename, file_dir, arguments):
     init_q = 0.1
     prob_a = -1.0  # eps-insensitive probabilistic constraint
     prob_b = -1.0  # eps-insensitive probabilistic constraint
+    gew = 1.0  # weight to the last measurement of the entropy term (historical moving average)
 
     step_adapt = False
     step_size = -1
@@ -64,6 +65,7 @@ def main(filename, file_dir, arguments):
     day_only = False
     save_scores_only = False
     check_params = True
+    softmax = False
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
@@ -72,7 +74,7 @@ def main(filename, file_dir, arguments):
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=", "probA=", "probB=",
-                        "step_adapt=", "save_scores_only="]
+                        "step_adapt=", "save_scores_only=", "softmax=", "gew="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
@@ -99,7 +101,9 @@ def main(filename, file_dir, arguments):
                    "lower bound of the bound-based probabilistic constraint",
                    "upper bound of the bound-based probabilistic constraint",
                    "use adaptive step_size (binary flag)",
-                   "do not save output data, with the exception of the scalar scores (binary flag)"]
+                   "do not save output data, with the exception of the scalar scores (binary flag)",
+                   "use the softmax activation (and Shannon's entropy)",
+                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)"]
 
     if arguments is not None and len(arguments) > 0:
         try:
@@ -204,6 +208,10 @@ def main(filename, file_dir, arguments):
                 step_adapt = int(arg) > 0
             elif opt == '--save_scores_only':
                 save_scores_only = int(arg) > 0
+            elif opt == '--softmax':
+                softmax = int(arg) > 0
+            elif opt == '--gew':
+                gew = float(arg) > 0
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
@@ -296,6 +304,7 @@ def main(filename, file_dir, arguments):
                'm': features,
                'n': c,
                'f': filter_size,
+               'softmax': softmax,
                'init_q': init_q,
                'theta': theta,
                'alpha': alpha,
@@ -322,7 +331,8 @@ def main(filename, file_dir, arguments):
                'grad': grad,
                'prob_a': prob_a,
                'prob_b': prob_b,
-               'save_scores_only': save_scores_only}
+               'save_scores_only': save_scores_only,
+               'gew': gew}
 
     out('[Algorithm Options]')
     out(json.dumps(options, indent=3))

@@ -26,6 +26,7 @@ class FeatureExtractor:
         self.beta = options['beta']
         self.theta = options['theta']
         self.k = options['k']
+        self.softmax = options['softmax']
         self.gamma = options['gamma']
         self.lambdaE = options['lambdaE']
         self.lambdaC = options['lambdaC']
@@ -36,6 +37,7 @@ class FeatureExtractor:
         self.eps2 = options['eps2']
         self.eps3 = options['eps3']
         self.zeta = options['zeta']
+        self.gew = options['gew']
         self.eta = options['eta']
         self.all_black = options['all_black']
         self.init_fixed = options['init_fixed'] > 0
@@ -56,6 +58,11 @@ class FeatureExtractor:
             self.alpha = 1.0
             self.beta = 0.0
             self.lambdaM = 0.0
+
+        # disabling probabilistic constraints in case of softmax activation
+        if self.softmax:
+            self.lambda1 = 0.0
+            self.lambda0 = 0.0
 
         self.__check_params(skip_some_checks=not options['check_params'])
 
@@ -205,6 +212,8 @@ class FeatureExtractor:
                             initializer=tf.zeros_initializer)
             tf.get_variable("gradient_like_norm_0", (), dtype=precision,
                             initializer=tf.constant_initializer(-1.0, dtype=precision))
+            tf.get_variable("feature_map_stats", [self.wh, self.m], dtype=precision,
+                            initializer=tf.constant_initializer(1.0 / self.m, dtype=precision))
 
             # the real variables
             if not self.init_fixed:
@@ -240,7 +249,7 @@ class FeatureExtractor:
             norm_q_mixed = tf.reduce_sum(tf.multiply(tf.get_variable("q2", dtype=precision),
                                                      tf.get_variable("q3", dtype=precision)))
 
-            # blurring (day and night)
+            # checking day and night conditions
             is_night = tf.get_variable("night", dtype=precision)
             is_day = tf.abs(is_night - 1.0)
 
@@ -257,6 +266,7 @@ class FeatureExtractor:
             else:
                 it_will_be_night = 0.0
 
+            # blurring
             frame_1 = (1.0 - it_will_be_night) * tf.get_variable("rho", dtype=precision) * frame_1
 
             # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
@@ -267,13 +277,18 @@ class FeatureExtractor:
                                                       motion_01), 2)  # broadcast (and then sum) over "n"
             v_delta_gamma = tf.expand_dims(v_delta_gamma, 0)  # 1 x h x w x n
 
-            # derivative of the input over time
+            # derivative of the input over time (fed_one_over_delta = 0 when t = 0)
             gamma_dot = tf.multiply(tf.subtract(frame_1, frame_0), fed_one_over_delta)  # 1 x h x w x n
 
-            # extracting patches from current frame (num_splits x wh_split x filter_volume; wh x filter_volume)
+            # extracting patches from current frame (wh x filter_volume)
             frame_patches = self.__extract_patches(frame_1)
 
-            # extracting patches from "gamma_dot + v_delta_gamma" (num_splits x wh_split x filter_volume)
+            # do we want to squash the almost constant patches?
+            # mean, var = tf.nn.moments(frame_patches, axes=1)
+            # mask_var = tf.expand_dims(tf.cast(tf.greater(var, 0.001), precision), 1)
+            # frame_patches = tf.multiply(frame_patches, mask_var)
+
+            # extracting patches from "gamma_dot + v_delta_gamma" (wh x filter_volume)
             gamma_dot_v_delta_patches = self.__extract_patches(tf.add(gamma_dot, v_delta_gamma))
 
             # computing a single block of M (filter volume x filter volume)
@@ -296,20 +311,24 @@ class FeatureExtractor:
             M_block_0 = tf.get_variable("M_block_0", dtype=precision)
             N_block_0 = tf.get_variable("N_block_0", dtype=precision)
 
-            # derivatives over time
+            # other derivatives over time (fed_one_over_delta = 0 when t = 0)
             M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0), fed_one_over_delta)  # filter vol x filter vol
             N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0), fed_one_over_delta)  # filter vol x filter vol
 
             # convolution
             filters_matrix = tf.get_variable("q1", dtype=precision)  # filter_volume x m
-            feature_maps = tf.add(tf.matmul(frame_patches, filters_matrix), 1.0 / self.m)  # wh x m
-            mask_sum_z = tf.cast(tf.less(feature_maps, 0.0), precision)  # wh x m
+            if self.softmax:
+                feature_maps = tf.nn.softmax(tf.matmul(frame_patches, filters_matrix), dim=1)  # wh x m
+            else:
+                feature_maps = tf.add(tf.matmul(frame_patches, filters_matrix), 1.0 / self.m)  # wh x m
 
+            # masks for piecewise-linear constraints
             if not self.prob_range:
-                mask = (-self.lambda0/self.alpha) * mask_sum_z
+                sum_feature_maps = None
                 mask_sum_a = None
                 mask_sum_b = None
-                sum_feature_maps = None
+                mask_sum_z = tf.cast(tf.less(feature_maps, 0.0), precision)  # wh x m
+                mask = (-self.lambda0/self.alpha) * mask_sum_z
             else:
                 sum_feature_maps = tf.expand_dims(tf.reduce_sum(feature_maps, 1), 1)  # wh x 1
                 mask_sum_a = tf.cast(tf.less(sum_feature_maps, self.prob_a), precision)  # wh x 1
@@ -319,8 +338,19 @@ class FeatureExtractor:
                     - (self.lambda0/self.alpha) * mask_sum_z
 
             # objective function terms: ce, -ge, mi
-            ce = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-            minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))), self.g_scale * self.g_scale)
+            if self.softmax:
+                p = tf.maximum(feature_maps, 0.00001)
+                p_log_p = tf.multiply(p, tf.div(tf.log(p), np.log(self.m)))  # wh x m
+                biased_p = tf.assign(tf.get_variable("feature_map_stats", dtype=precision),
+                                     self.gew * p + (1.0 - self.gew)
+                                     * tf.get_variable("feature_map_stats", dtype=precision))
+                avg_p = tf.reduce_mean(biased_p, 0)  # m
+                ce = -tf.reduce_sum(tf.reduce_mean(p_log_p, 0))
+                minus_ge = tf.reduce_sum(tf.multiply(avg_p, tf.div(tf.log(avg_p), np.log(self.m))))
+            else:
+                ce = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
+                minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))), self.g_scale * self.g_scale)
+
             mi = - ce - minus_ge
 
             # real mutual information
@@ -336,7 +366,7 @@ class FeatureExtractor:
 
             # objective function terms: probabilistic constraints
             if not self.prob_range:
-                sum_to_one = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 1) - 1.0)), self.g_scale)
+                sum_to_one = 0.5 * tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 1) - 1.0)), self.g_scale)
             else:
                 sum_to_one = tf.div(tf.reduce_sum(
                         tf.multiply(mask_sum_b, sum_feature_maps - self.prob_b)
@@ -353,7 +383,7 @@ class FeatureExtractor:
                                             tf.matmul(O_block, tf.get_variable("q1", dtype=precision))))
 
             # objective function
-            obj = self.lambdaC * ce + self.lambdaE * minus_ge + self.lambda0 * negativeness \
+            obj = self.lambdaC * 0.5 * ce + self.lambdaE * 0.5 * minus_ge + self.lambda0 * negativeness \
                 + self.lambda1 * sum_to_one + self.lambdaM * motion \
                 + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot \
                 + self.gamma * norm_q_mixed + self.k * norm_q
@@ -425,44 +455,48 @@ class FeatureExtractor:
             assert (not np.isnan(2 * self.theta)) and (np.isfinite(2 * self.theta))
             assert (not np.isnan((1.0 - self.lambdaC) / self.m)) and (np.isfinite((1.0 - self.lambdaC) / self.m))
 
-            # D (this is just a portion of the D matrix in the paper)
-            D = tf.multiply(tf.eye(self.ffn), self.k / self.alpha) \
-                - tf.multiply(N_block_1_trans, (self.lambdaM * self.theta) / self.alpha) \
-                + tf.multiply(tf.subtract(O_block, tf.transpose(N_block_dot)), self.lambdaM / self.alpha) \
-                + tf.multiply(B, self.lambdaE / self.alpha)
+            if not self.softmax:
+                # D (this is just a portion of the D matrix in the paper)
+                D = tf.multiply(tf.eye(self.ffn), self.k / self.alpha) \
+                    - tf.multiply(N_block_1_trans, (self.lambdaM * self.theta) / self.alpha) \
+                    + tf.multiply(tf.subtract(O_block, tf.transpose(N_block_dot)), self.lambdaM / self.alpha) \
+                    + tf.multiply(B, self.lambdaE / self.alpha)
 
-            D_q1 = tf.matmul(D, tf.get_variable("q1", dtype=precision)) \
-                - tf.multiply(M_block_1_q1, self.lambdaC / self.alpha)
+                D_q1 = tf.matmul(D, tf.get_variable("q1", dtype=precision)) \
+                    - tf.multiply(M_block_1_q1, self.lambdaC / self.alpha)
 
-            if not self.prob_range:
-                D_q1 = D_q1 + tf.tile(tf.multiply(tf.expand_dims(tf.reduce_sum(M_block_1_q1, 1), 1),
-                                      self.lambda1 / self.alpha), [1, self.m])
+                if not self.prob_range:
+                    D_q1 = D_q1 + tf.tile(tf.multiply(tf.expand_dims(tf.reduce_sum(M_block_1_q1, 1), 1),
+                                          self.lambda1 / self.alpha), [1, self.m])
 
-            # C
-            C = tf.multiply(tf.eye(self.ffn), (self.gamma / self.alpha) * self.theta * self.theta
-                            - (self.beta / self.alpha) * self.theta
-                            - tf.multiply(M_block_1, (self.lambdaM / self.alpha) * self.theta)) \
-                - tf.multiply(M_block_dot + N_block_1_trans - N_block_1, self.lambdaM / self.alpha)
+                # C
+                C = tf.multiply(tf.eye(self.ffn), (self.gamma / self.alpha) * self.theta * self.theta
+                                - (self.beta / self.alpha) * self.theta
+                                - tf.multiply(M_block_1, (self.lambdaM / self.alpha) * self.theta)) \
+                    - tf.multiply(M_block_dot + N_block_1_trans - N_block_1, self.lambdaM / self.alpha)
 
-            C_q2 = tf.matmul(C, tf.get_variable("q2", dtype=precision))
+                C_q2 = tf.matmul(C, tf.get_variable("q2", dtype=precision))
 
-            # B
-            B = tf.multiply(tf.eye(self.ffn), self.theta * self.theta
-                            + (self.gamma / self.alpha) * self.theta
-                            - (self.beta / self.alpha)) \
-                - tf.multiply(M_block_1, self.lambdaM / self.alpha)
+                # B
+                Bbb = tf.multiply(tf.eye(self.ffn), self.theta * self.theta
+                                + (self.gamma / self.alpha) * self.theta
+                                - (self.beta / self.alpha)) \
+                    - tf.multiply(M_block_1, self.lambdaM / self.alpha)
 
-            B_q3 = tf.matmul(B, tf.get_variable("q3", dtype=precision))
+                B_q3 = tf.matmul(Bbb, tf.get_variable("q3", dtype=precision))
 
-            # A
-            A_q4 = tf.multiply(tf.get_variable("q4", dtype=precision), 2 * self.theta)
+                # A
+                A_q4 = tf.multiply(tf.get_variable("q4", dtype=precision), 2 * self.theta)
 
-            # F
-            F = tf.multiply(b, (self.lambdaE - self.lambdaC) / (self.m * self.alpha)) + nab_ws
+                # F
+                F = tf.multiply(b, (self.lambdaE - self.lambdaC) / (self.m * self.alpha)) + nab_ws
 
-            # temporarily computing the updated version of q4 (saved into another memory area)
+                # temporarily computing the updated version of q4 (saved into another memory area)
+                gradient_like = D_q1 + C_q2 + B_q3 + A_q4 + F
+            else:
+                gradient_like = tf.gradients(obj, filters_matrix)[0]  # automatic gradient computation
+
             step_size = tf.get_variable("step_size", dtype=precision)
-            gradient_like = D_q1 + C_q2 + B_q3 + A_q4 + F
 
             if self.step_adapt:
                 gradient_like_norm_1 = tf.norm(gradient_like)
