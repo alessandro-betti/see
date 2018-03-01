@@ -11,7 +11,7 @@ one gets the following output Usage:
 	vprocessor.py --run <file/folder/0> --out <folder> [options]
 	vprocessor.py --pre <file/0> --out <folder> [options]
 
-where 'file' is video file, and '0' indicates the local web-cam
+where 'file' is video file, and '0' indicates the local web-cam.
 
 ## Options
 Options can be:

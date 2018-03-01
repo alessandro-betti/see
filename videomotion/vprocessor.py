@@ -9,6 +9,7 @@ from visuserver import VisualizationServer
 import json
 
 #This is the main program
+# test
 def main(filename, file_dir, arguments):
 
     # let's print some stuff to debug the provided argument :)

@@ -27,6 +27,13 @@
 \font\ninerm=cmr9
 \font\eightrm=cmr8
 
+%star heading
+\font\manfnt=manfnt % special symbols from the TeX project
+\font\titlefont=cmssbx10 scaled\magstep2
+\def\volheadline#1{\line{\cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill
+       \titlefont\ #1\ \cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill}}
+%end
+
 \line{{\bf Built-in probabilistic normalization}\hfil{\eightrm
 rough notes, \today\/ @ \hours}}
 \bigskip
@@ -116,8 +123,93 @@ More explicitly we have that
 $${\partial \Phi\over\partial q_k}=\sum_{i,\ell=0}^{n-1}\sum_{j\in J_\ell}
 \sum_{x\in X^\sharp}g_x\left(\biggl(\sum_{y\in X^\sharp}
 g_y \sigma_i(q\Ast y\Gamma(t))\biggr)-\lambda_C\sigma_i(q\ast \Gamma(t))
-\right){\partial \sigma_i\over a_\ell^x}\delta_{jk}\Gamma_{T_x(j)}.
+\right){\partial \sigma_i\over\partial a_\ell^x}\delta_{jk}\Gamma_{T_x(j)}.
 \eqno(7)$$
 Is this form useful at all?
 
+\bigskip\bigskip
+\volheadline{NEW NOTATION}
+\bigskip
+\noindent
+We know from our technical report that the activations are evaluated as
+$$a^x_i=\sum_{k=0}^{m-1}\sum_{-f\le\xi_1,\xi_2\le f}
+\varphi_{ik(x_1-\xi_1)(x_2-\xi_2)}C_{k\xi_1\xi_2}=\sum_{k=0}^{m-1}
+\sum_{-f\le\xi_1,\xi_2\le f}\varphi_{ik\xi_1\xi_2}C_{k(x_1-\xi_1)(x_2-\xi_2)}.
+$$
+The last equality is true since the convolution is invertible when the
+filters are defined on $[-2L\dts 2L]$ where $L$ is the size of the frame.
+Here we use the convention that whenever the last two indexes of
+$C$ are outside $[0\dts L]\times[0\dts L]$, $C$ is set by definition to $0$
+($0$-padding).
+Define the following $m f^2\times n$ matrix:
+$$Q:=\pmatrix{\varphi_{0000}&\varphi_{1000}&\dots&\varphi_{(n-1)000}\cr
+\varphi_{0001}&\varphi_{1001}&\dots&\varphi_{100(n-1)}\cr
+\vdots&\vdots&&\vdots\cr
+\varphi_{0(m-1)ff}&\varphi_{1(m-1)ff}&\dots&\varphi_{(n-1)(m-1)ff}\cr}$$
+Then define $\Gamma$ as the matrix that has a line for each value of
+$(x_1,x_2)$ then it will have $\ell^2$ lines and on the columns the values of
+$C_{k(x_1-\xi_1)(x_2-\xi_2)}$, so it will have $mf^2$ columns. The order of
+the lines and columns is chosen in such a way that $a_i^x=(\Gamma Q)_{xi}$.
+With this notation we have that the features can be expressed as
+$$C^\sharp_{ix}(t)=\sigma_i(a_0^x,a_2^x,\dots, a_{n-1}^x),\qquad
+x=0,\dots, \ell^2-1$$
+What we want to find then are the elements of the matrix  $Q$.
+
+With this notation we can rewrite Eq.~(4) as
+$${\cal H}(Q)=
+\sum_{i=0}^{n-1}\int_0^T dt\, h(t)\biggl[{1\over2}
+\biggl(\,\sum_{x=0}^{\ell^2-1}
+g_x \sigma_i(a^x)\biggr)^2-{\lambda_C\over2}
+\sum_{x=0}^{\ell^2-1} g_x \Bigl(\sigma_i(a^x)
+\Bigr)^2\biggr],$$
+where we have defined $a^x=(a_0^x,a_2^x,\dots, a_{n-1}^x)$, and then
+$$\Phi(t,Q):=h(t)\sum_{i=0}^{n-1}\biggl[{1\over2}
+\biggl(\,\sum_{x=0}^{\ell^2-1}
+g_x \sigma_i(a^x)\biggr)^2-{\lambda_C\over2}
+\sum_{x=0}^{\ell^2-1} g_x \Bigl(\sigma_i(a^x)
+\Bigr)^2\biggr]=h(t)(\Phi_1-\lambda_C\Phi_2).$$
+The derivative with respect to the generic element $Q_{km}$ yields:
+$$
+{\partial\Phi(t,Q)\over\partial Q_{km}}=
+h(t)\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x\biggl(
+\sum_{y=0}^{\ell^2-1}g_y\sigma_i(a^y)-\lambda_C\sigma_i(a^x)\biggr)
+\biggl({\delta_{im}\over \sum_{\alpha=0}^{n-1}e^{a^x_\alpha}}
+-{e^{a_i^x+a_m^x}\over \big(\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}\big)^2 }\biggr)
+\Gamma_{xk}.
+$$
+Let us also define $S_{xi}=\sigma_i(a^x)$ and
+$\nu\equiv\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}$
+$$\eqalign{
+{\partial\Phi_1(t,Q)\over\partial Q_{km}}&=
+\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x(S'g)_i
+\biggl({\delta_{im}\over \nu}
+-S_{xi}S_{xm}\biggr)
+\Gamma_{xk}\cr
+&={1\over \nu}(\Gamma'g)_k(S'g)_m
+-\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S'g)_iS_{xi}S_{xm}\Gamma_{xk}\cr
+&={1\over \nu}(\Gamma'g)_k(S'g)_m-
+(\Gamma'[(g\odot(SS'g))^\updownarrow\odot S])_{km},\cr}$$
+where $\odot$ is the Hadamard product between vectors or matrices
+and given a vector $v$ we indicate with
+$v^\updownarrow$ the matrix which has on the lines the vector $v$ (and has
+consistent dimensions).
+$$\eqalign{
+{\partial\Phi_2(t,Q)\over\partial Q_{km}}&=
+\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x S_{xi}
+\biggl({\delta_{im}\over  \nu}
+-S_{xi}S_{xm}\biggr)\Gamma_{xk}\cr
+&={1\over\nu}(\Gamma'(g^\updownarrow\odot S))_{km}
+-\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S\odot S)_{xi}S_{xm}\Gamma_{xk}\cr
+&={1\over\nu}(\Gamma'(g^\updownarrow\odot S))_{km}-
+(\Gamma'[(g\odot(S\odot S)^-)^\updownarrow\odot S])_{km},\cr}$$
+where given a matrix $A$ we denote with $A^-$ the column vector obtained from
+$A$ by adding the columns together: $(A^-)_i=\sum_j A_{ij}$.
+Then putting everything together we eventually end up with:
+$${1\over h}{\partial\Phi\over\partial Q}={1\over \nu}
+\big((\Gamma'g)\otimes(S'g)+
+\Gamma'(g^\updownarrow\odot S)\big)-\lambda_C
+\big(\Gamma'[(g\odot(SS'g))^\updownarrow\odot S]
++\Gamma'[(g\odot(S\odot S)^-)^\updownarrow\odot S]\big);$$
+where $\otimes$ is the tensor (outer) product between two vectors:
+$(v\otimes w)_{ij}=v_i w_j$.
 \bye
