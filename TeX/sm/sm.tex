@@ -167,7 +167,7 @@ $$\Phi(t,Q):=h(t)\sum_{i=0}^{n-1}\biggl[{1\over2}
 \biggl(\,\sum_{x=0}^{\ell^2-1}
 g_x \sigma_i(a^x)\biggr)^2-{\lambda_C\over2}
 \sum_{x=0}^{\ell^2-1} g_x \Bigl(\sigma_i(a^x)
-\Bigr)^2\biggr].$$
+\Bigr)^2\biggr]=h(t)(\Phi_1-\lambda_C\Phi_2).$$
 The derivative with respect to the generic element $Q_{km}$ yields:
 $$
 {\partial\Phi(t,Q)\over\partial Q_{km}}=
@@ -177,4 +177,37 @@ h(t)\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x\biggl(
 -{e^{a_i^x+a_m^x}\over \big(\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}\big)^2 }\biggr)
 \Gamma_{xk}.
 $$
+Let us also define $S_{xi}=\sigma_i(a^x)$ and
+$\nu\equiv\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}$
+$$\eqalign{
+{\partial\Phi_1(t,Q)\over\partial Q_{km}}&=
+\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x(S'g)_i
+\biggl({\delta_{im}\over \nu}
+-S_{xi}S_{xm}\biggr)
+\Gamma_{xk}\cr
+&={1\over \nu}(\Gamma'g)_k(S'g)_m
+-\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S'g)_iS_{xi}S_{xm}\Gamma_{xk}\cr
+&={1\over \nu}(\Gamma'g)_k(S'g)_m-
+(\Gamma'[(g\odot(SS'g))^\updownarrow\odot S])_{km},\cr}$$
+where $\odot$ is the Hadamard product between vector or matrices
+and given a vector $v$ we indicate with
+$v^\updownarrow$ the matrix which has on the lines the vector $v$.
+$$\eqalign{
+{\partial\Phi_2(t,Q)\over\partial Q_{km}}&=
+\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x S_{xi}
+\biggl({\delta_{im}\over  \nu}
+-S_{xi}S_{xm}\biggr)\Gamma_{xk}\cr
+&={1\over\nu}(\Gamma'(g^\updownarrow\odot S))_{km}
+-\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S\odot S)_{xi}S_{xm}\Gamma_{xk}\cr
+&={1\over\nu}(\Gamma'(g^\updownarrow\odot S))_{km}-
+(\Gamma'[(g\odot(S\odot S)^-)^\updownarrow\odot S])_{km},\cr}$$
+where given a matrix $A$ we denote with $A^-$ the column vector obtained from
+$A$ by adding the columns together: $(A^-)_i=\sum_j A_{ij}$.
+Then putting everything together we eventually end up with:
+$${1\over h}{\partial\Phi\over\partial Q}={1\over \nu}\big((\Gamma'g)\otimes(S'g)+
+\Gamma'(g^\updownarrow\odot S)\big)-\lambda_C
+\big(\Gamma'[(g\odot(SS'g))^\updownarrow\odot S]
++\Gamma'[(g\odot(S\odot S)^-)^\updownarrow\odot S]\big);$$
+where $\otimes$ is the tensor (outer) product between two vectors:
+$(v\otimes w)_{ij}=v_i w_j$.
 \bye
