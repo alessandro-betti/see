@@ -211,7 +211,7 @@ def main(filename, file_dir, arguments):
             elif opt == '--softmax':
                 softmax = int(arg) > 0
             elif opt == '--gew':
-                gew = float(arg) > 0
+                gew = float(arg)
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)

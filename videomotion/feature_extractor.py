@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import shutil
+# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0
 
 
 class FeatureExtractor:
@@ -200,7 +201,7 @@ class FeatureExtractor:
                             initializer=tf.constant_initializer(0.0, dtype=precision))
             tf.get_variable("obj_values", [12], dtype=precision,
                             initializer=tf.constant_initializer(0.0, dtype=precision))
-            tf.get_variable("step_size", (), dtype=precision,
+            tf.get_variable("step_size", [self.ffn, self.m], dtype=precision,
                             initializer=tf.constant_initializer(self.step_size, dtype=precision))
 
             # variables that store what has been computed in the previous frame
@@ -210,7 +211,7 @@ class FeatureExtractor:
                             initializer=tf.zeros_initializer)
             tf.get_variable("N_block_0", [self.ffn, self.ffn], dtype=precision,
                             initializer=tf.zeros_initializer)
-            tf.get_variable("gradient_like_norm_0", (), dtype=precision,
+            tf.get_variable("gradient_like_0", [self.ffn, self.m], dtype=precision,
                             initializer=tf.constant_initializer(-1.0, dtype=precision))
             tf.get_variable("feature_map_stats", [self.wh, self.m], dtype=precision,
                             initializer=tf.constant_initializer(1.0 / self.m, dtype=precision))
@@ -234,23 +235,25 @@ class FeatureExtractor:
             my_scope.reuse_variables()
 
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
-            frame_0_init_op = tf.assign(tf.get_variable("frame_0", dtype=precision),
+            frame_0_init_op = tf.assign(tf.get_variable("frame_0"),
                                         tf.expand_dims(tf.div(fed_frame_0, 255.0), 0))
-            frame_0 = tf.get_variable("frame_0", dtype=precision)
-
+            frame_0 = tf.get_variable("frame_0")
             frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
             motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
 
+            # getting the filter matrix
+            filters_matrix = tf.get_variable("q1")  # filter_volume x m
+
             # computing norm of variables
-            norm_q = tf.reduce_sum(tf.square(tf.get_variable("q1", dtype=precision)))
-            norm_q_dot = tf.reduce_sum(tf.square(tf.get_variable("q2", dtype=precision)))
-            norm_q_dot_dot = tf.reduce_sum(tf.square(tf.get_variable("q3", dtype=precision)))
-            norm_q_dot_dot_dot = tf.reduce_sum(tf.square(tf.get_variable("q4", dtype=precision)))
-            norm_q_mixed = tf.reduce_sum(tf.multiply(tf.get_variable("q2", dtype=precision),
-                                                     tf.get_variable("q3", dtype=precision)))
+            norm_q = tf.reduce_sum(tf.square(filters_matrix))
+            norm_q_dot = tf.reduce_sum(tf.square(tf.get_variable("q2")))
+            norm_q_dot_dot = tf.reduce_sum(tf.square(tf.get_variable("q3")))
+            norm_q_dot_dot_dot = tf.reduce_sum(tf.square(tf.get_variable("q4")))
+            norm_q_mixed = tf.reduce_sum(tf.multiply(tf.get_variable("q2"),
+                                                     tf.get_variable("q3")))
 
             # checking day and night conditions
-            is_night = tf.get_variable("night", dtype=precision)
+            is_night = tf.get_variable("night")
             is_day = tf.abs(is_night - 1.0)
 
             condition1 = tf.cast(tf.less(norm_q_dot, self.eps1), precision) * \
@@ -267,7 +270,7 @@ class FeatureExtractor:
                 it_will_be_night = 0.0
 
             # blurring
-            frame_1 = (1.0 - it_will_be_night) * tf.get_variable("rho", dtype=precision) * frame_1
+            frame_1 = (1.0 - it_will_be_night) * tf.get_variable("rho") * frame_1
 
             # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
             spatial_gradient = FeatureExtractor.__spatial_gradient(frame_1, self.h, self.w, self.n)  # frame 1 here
@@ -308,15 +311,14 @@ class FeatureExtractor:
             B = tf.matmul(b, b, transpose_b=True)
 
             # getting the previously computed quantities
-            M_block_0 = tf.get_variable("M_block_0", dtype=precision)
-            N_block_0 = tf.get_variable("N_block_0", dtype=precision)
+            M_block_0 = tf.get_variable("M_block_0")
+            N_block_0 = tf.get_variable("N_block_0")
 
             # other derivatives over time (fed_one_over_delta = 0 when t = 0)
             M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0), fed_one_over_delta)  # filter vol x filter vol
             N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0), fed_one_over_delta)  # filter vol x filter vol
 
             # convolution
-            filters_matrix = tf.get_variable("q1", dtype=precision)  # filter_volume x m
             if self.softmax:
                 feature_maps = tf.nn.softmax(tf.matmul(frame_patches, filters_matrix), dim=1)  # wh x m
             else:
@@ -341,9 +343,7 @@ class FeatureExtractor:
             if self.softmax:
                 p = tf.maximum(feature_maps, 0.00001)
                 p_log_p = tf.multiply(p, tf.div(tf.log(p), np.log(self.m)))  # wh x m
-                biased_p = tf.assign(tf.get_variable("feature_map_stats", dtype=precision),
-                                     self.gew * p + (1.0 - self.gew)
-                                     * tf.get_variable("feature_map_stats", dtype=precision))
+                biased_p = self.gew * p + (1.0 - self.gew) *tf.get_variable("feature_map_stats")
                 avg_p = tf.reduce_mean(biased_p, 0)  # m
                 ce = -tf.reduce_sum(tf.reduce_mean(p_log_p, 0))
                 minus_ge = tf.reduce_sum(tf.multiply(avg_p, tf.div(tf.log(avg_p), np.log(self.m))))
@@ -375,12 +375,11 @@ class FeatureExtractor:
             negativeness = -tf.div(tf.reduce_sum(tf.multiply(feature_maps, mask_sum_z)), self.g_scale)
 
             # objective function terms: motion
-            motion = tf.reduce_sum(tf.multiply(tf.get_variable("q2", dtype=precision),
-                                               tf.matmul(M_block_1, tf.get_variable("q2", dtype=precision)))) \
-                + 2.0 * tf.reduce_sum(tf.multiply(tf.get_variable("q1", dtype=precision),
-                                                  tf.matmul(N_block_1, tf.get_variable("q2", dtype=precision)))) \
-                + tf.reduce_sum(tf.multiply(tf.get_variable("q1", dtype=precision),
-                                            tf.matmul(O_block, tf.get_variable("q1", dtype=precision))))
+            motion = tf.reduce_sum(tf.multiply(tf.get_variable("q2"),
+                                               tf.matmul(M_block_1, tf.get_variable("q2")))) \
+                + 2.0 * tf.reduce_sum(tf.multiply(filters_matrix,
+                                                  tf.matmul(N_block_1, tf.get_variable("q2")))) \
+                + tf.reduce_sum(tf.multiply(filters_matrix, tf.matmul(O_block, filters_matrix)))
 
             # objective function
             obj = self.lambdaC * 0.5 * ce + self.lambdaE * 0.5 * minus_ge + self.lambda0 * negativeness \
@@ -389,7 +388,7 @@ class FeatureExtractor:
                 + self.gamma * norm_q_mixed + self.k * norm_q
 
             # TensorBoard-related
-            tf.summary.scalar('J_Rho', tf.get_variable("rho", dtype=precision))
+            tf.summary.scalar('J_Rho', tf.get_variable("rho"))
             tf.summary.scalar('C_MutualInformation', mi)
             tf.summary.scalar('D_RealMutualInformation', mi_real)
             tf.summary.scalar('E_ConditionalEntropy', ce)
@@ -431,7 +430,7 @@ class FeatureExtractor:
             nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
 
             # intermediate terms
-            M_block_1_q1 = tf.matmul(M_block_1, tf.get_variable("q1", dtype=precision))  # filter_volume x m
+            M_block_1_q1 = tf.matmul(M_block_1, filters_matrix)  # filter_volume x m
             N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
 
             # checking constants
@@ -462,7 +461,7 @@ class FeatureExtractor:
                     + tf.multiply(tf.subtract(O_block, tf.transpose(N_block_dot)), self.lambdaM / self.alpha) \
                     + tf.multiply(B, self.lambdaE / self.alpha)
 
-                D_q1 = tf.matmul(D, tf.get_variable("q1", dtype=precision)) \
+                D_q1 = tf.matmul(D, filters_matrix) \
                     - tf.multiply(M_block_1_q1, self.lambdaC / self.alpha)
 
                 if not self.prob_range:
@@ -475,7 +474,7 @@ class FeatureExtractor:
                                 - tf.multiply(M_block_1, (self.lambdaM / self.alpha) * self.theta)) \
                     - tf.multiply(M_block_dot + N_block_1_trans - N_block_1, self.lambdaM / self.alpha)
 
-                C_q2 = tf.matmul(C, tf.get_variable("q2", dtype=precision))
+                C_q2 = tf.matmul(C, tf.get_variable("q2"))
 
                 # B
                 Bbb = tf.multiply(tf.eye(self.ffn), self.theta * self.theta
@@ -483,10 +482,10 @@ class FeatureExtractor:
                                 - (self.beta / self.alpha)) \
                     - tf.multiply(M_block_1, self.lambdaM / self.alpha)
 
-                B_q3 = tf.matmul(Bbb, tf.get_variable("q3", dtype=precision))
+                B_q3 = tf.matmul(Bbb, tf.get_variable("q3"))
 
                 # A
-                A_q4 = tf.multiply(tf.get_variable("q4", dtype=precision), 2 * self.theta)
+                A_q4 = tf.multiply(tf.get_variable("q4"), 2 * self.theta)
 
                 # F
                 F = tf.multiply(b, (self.lambdaE - self.lambdaC) / (self.m * self.alpha)) + nab_ws
@@ -496,64 +495,64 @@ class FeatureExtractor:
             else:
                 gradient_like = tf.gradients(obj, filters_matrix)[0]  # automatic gradient computation
 
-            step_size = tf.get_variable("step_size", dtype=precision)
+            step_size = tf.get_variable("step_size")
 
             if self.step_adapt:
-                gradient_like_norm_1 = tf.norm(gradient_like)
-
-                increase = tf.cast(tf.less(gradient_like_norm_1,
-                                           tf.get_variable("gradient_like_norm_0", dtype=precision)), precision)
+                increase = tf.cast(tf.greater(gradient_like *
+                                              tf.get_variable("gradient_like_0"), 0.0), precision)
                 reduce = 1.0 - increase
-                up_step = tf.assign(tf.get_variable("step_size", dtype=precision),
-                                    tf.maximum(step_size * 0.1 * reduce + step_size * 2.0 * increase, self.step_size))
-                with tf.control_dependencies([up_step]):
-                    up_like = tf.assign(tf.get_variable("gradient_like_norm_0", dtype=precision), gradient_like_norm_1)
-            else:
-                up_like = tf.eye(1)
+                up_step = tf.assign(tf.get_variable("step_size"),
+                                    tf.minimum(tf.maximum(step_size * 0.1 * reduce + step_size * 2.0 * increase,
+                                                          self.step_size), self.step_size * 1000))
 
-            with tf.control_dependencies([up_like]):
+            else:
+                up_step = tf.get_variable("step_size")
+
+            with tf.control_dependencies([up_step]):
                 if not self.grad:
-                    __updated_q4 = tf.subtract(tf.get_variable("q4", dtype=precision),
+                    __updated_q4 = tf.subtract(tf.get_variable("q4"),
                                                tf.multiply(gradient_like,
-                                                           tf.get_variable("step_size", dtype=precision)))
+                                                           tf.get_variable("step_size")))
                 else:
-                    __updated_q4 = tf.subtract(tf.get_variable("q1", dtype=precision),
-                                               tf.multiply(gradient_like,
-                                                           tf.get_variable("step_size", dtype=precision)))
+                    up_q4 = tf.assign(filters_matrix, filters_matrix - gradient_like * up_step)
 
             # updating q1, q2, q3, and q4 (the last one is updated using the temporarily computed q4)
-            with tf.control_dependencies([__updated_q4]):
-                up_q1 = tf.assign_add(tf.get_variable("q1", dtype=precision),
-                                      tf.multiply(tf.get_variable("q2"),
-                                                  tf.get_variable("step_size", dtype=precision)))
-                with tf.control_dependencies([up_q1]):
-                    up_q2 = tf.assign_add(tf.get_variable("q2", dtype=precision),
-                                          tf.multiply(tf.get_variable("q3", dtype=precision),
-                                                      tf.get_variable("step_size", dtype=precision)))
-                    with tf.control_dependencies([up_q2]):
-                        up_q3 = tf.assign_add(tf.get_variable("q3", dtype=precision),
-                                              tf.multiply(tf.get_variable("q4", dtype=precision),
-                                                          tf.get_variable("step_size", dtype=precision)))
-                        with tf.control_dependencies([up_q3]):
-                            if not self.grad:
-                                up_q4 = tf.assign(tf.get_variable("q4", dtype=precision), __updated_q4)
-                            else:
-                                up_q4 = tf.assign(tf.get_variable("q1", dtype=precision), __updated_q4)
+            if not self.grad:
+                with tf.control_dependencies([__updated_q4]):
+                    up_q1 = tf.assign_add(filters_matrix,
+                                          tf.multiply(tf.get_variable("q2"),
+                                                      tf.get_variable("step_size")))
+                    with tf.control_dependencies([up_q1]):
+                        up_q2 = tf.assign_add(tf.get_variable("q2"),
+                                              tf.multiply(tf.get_variable("q3"),
+                                                          tf.get_variable("step_size")))
+                        with tf.control_dependencies([up_q2]):
+                            up_q3 = tf.assign_add(tf.get_variable("q3"),
+                                                  tf.multiply(tf.get_variable("q4"),
+                                                              tf.get_variable("step_size")))
+                            with tf.control_dependencies([up_q3]):
+                                up_q4 = tf.assign(tf.get_variable("q4"), __updated_q4)
 
             # updating cyclic dependencies
             with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot]):
-                up_frame_0 = tf.assign(tf.get_variable("frame_0", dtype=precision), frame_1)
-                up_M_block_0 = tf.assign(tf.get_variable("M_block_0", dtype=precision), M_block_1)
-                up_N_block_0 = tf.assign(tf.get_variable("N_block_0", dtype=precision), N_block_1)
+                up_frame_0 = tf.assign(tf.get_variable("frame_0"), frame_1)
+                up_M_block_0 = tf.assign(tf.get_variable("M_block_0"), M_block_1)
+                up_N_block_0 = tf.assign(tf.get_variable("N_block_0"), N_block_1)
+                up_gradient_like = tf.assign(tf.get_variable("gradient_like_0"), gradient_like)
+                if self.softmax:
+                    up_feature_map_stats = tf.assign(tf.get_variable("feature_map_stats"), biased_p)
+                else:
+                    up_feature_map_stats = tf.eye(1)
 
-                diff_rho = 1.0 - tf.get_variable("rho", dtype=precision)
-                up_night = tf.assign(tf.get_variable("night", dtype=precision), it_will_be_night)
-                up_rho = tf.assign_add(tf.get_variable("rho", dtype=precision),
+                diff_rho = 1.0 - tf.get_variable("rho")
+                up_night = tf.assign(tf.get_variable("night"), it_will_be_night)
+                up_rho = tf.assign_add(tf.get_variable("rho"),
                                        self.eta * tf.cast(tf.greater(diff_rho, 0.0), precision)
                                        * diff_rho * (1.0 - it_will_be_night))
 
             # coordinator
-            with tf.control_dependencies([up_q4, up_frame_0, up_M_block_0, up_N_block_0, up_rho, up_night]):
+            with tf.control_dependencies([up_q4, up_frame_0, up_M_block_0, up_N_block_0,
+                                          up_gradient_like, up_feature_map_stats, up_rho, up_night]):
                 fake_op = tf.eye(1)
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
