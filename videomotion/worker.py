@@ -1,6 +1,7 @@
 import numpy as np
 import time
 from feature_extractor import FeatureExtractor
+#from feature_extractor_net import FeatureExtractor
 from utils import out
 import json
 
