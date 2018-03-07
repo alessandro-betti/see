@@ -1,3 +1,4 @@
+\input colordvi
 \magnification=\magstep1
 \baselineskip14pt
 \tracingpages=1 % show paging decisions, to help with figure placement
@@ -33,6 +34,28 @@
 \def\volheadline#1{\line{\cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill
        \titlefont\ #1\ \cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill}}
 %end
+
+% macros for verbatim scanning
+% the max number of \tt chars/line is 66 (10pt), 73 (9pt), 81 (8pt), 93 (7pt)
+% minus 4 or 5 characters for indentation at the left
+\chardef\other=12
+\def\ttverbatim{\catcode`\\=\other
+  \catcode`\{=\other
+  \catcode`\}=\other
+  \catcode`\$=\other
+  \catcode`\&=\other
+  \catcode`\#=\other
+  \catcode`\%=\other
+  \catcode`\~=\other
+  \catcode`\_=\other
+  \catcode`\^=\other
+  \obeyspaces \obeylines \tt}
+\def\begintt{$$\ttverbatim \catcode`\|=0 \ttfinish}
+{\catcode`\|=0 \catcode`|\=\other % | is temporary escape character
+  |obeylines   % end of line is active
+  |gdef|intt#1^^M{|noalign{#1}}%
+  |gdef|ttfinish#1^^M#2\endtt{#1|let^^M=|cr %
+    |halign{|hskip|parindent##|hfil|cr#2}$$}}
 
 \line{{\bf Built-in probabilistic normalization}\hfil{\eightrm
 rough notes, \today\/ @ \hours}}
@@ -173,45 +196,99 @@ $$
 {\partial\Phi(t,Q)\over\partial Q_{km}}=
 h(t)\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x\biggl(
 \sum_{y=0}^{\ell^2-1}g_y\sigma_i(a^y)-\lambda_C\sigma_i(a^x)\biggr)
-\biggl({\delta_{im}\over \sum_{\alpha=0}^{n-1}e^{a^x_\alpha}}
--{e^{a_i^x+a_m^x}\over \big(\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}\big)^2 }\biggr)
-\Gamma_{xk}.
+\bigl(\sigma_i(a^x)\delta_{im}-\sigma_i(a^x)\sigma_m(a^x)\bigr)\Gamma_{xk}.
 $$
-Let us also define $S_{xi}=\sigma_i(a^x)$ and
-$(\nu)_x\equiv1/\sum_{\alpha=0}^{n-1}e^{a^x_\alpha}$
+Let us also define $S_{xi}=\sigma_i(a^x)$ 
 $$\eqalign{
 {\partial\Phi_1(t,Q)\over\partial Q_{km}}&=
 \sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x(S'g)_i
-\biggl(\nu_x\delta_{im}
+\biggl(S_{xi}\delta_{im}
 -S_{xi}S_{xm}\biggr)
 \Gamma_{xk}\cr
-&=(\Gamma'(g\odot \nu))_k(S'g)_m
+&=((g^\leftrightarrow\odot\Gamma)'(S\odot (S'g)^{\updownarrow}))_{km}
 -\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S'g)_iS_{xi}S_{xm}\Gamma_{xk}\cr
-&=(\Gamma'(g\odot\nu))_k(S'g)_m-
+&=((g^\leftrightarrow\odot\Gamma)'(S\odot (S'g)^{\updownarrow}))_{km}-
 (\Gamma'[(g\odot(SS'g))^\leftrightarrow\odot S])_{km},\cr}$$
 where $\odot$ is the Hadamard product between vectors or matrices
 and given a vector $v$ we indicate with
-$v^\leftrightarrow$ the matrix which has on the columns the vector $v$ (and has
+$v^\leftrightarrow$ ($v^\updownarrow$)
+the matrix which has on the columns (rows) the vector $v$ (and has
 consistent dimensions).
 $$\eqalign{
 {\partial\Phi_2(t,Q)\over\partial Q_{km}}&=
 \sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1} g_x S_{xi}
-\biggl(\nu_x\delta_{im}
+\biggl(S_{xi}\delta_{im}
 -S_{xi}S_{xm}\biggr)\Gamma_{xk}\cr
-&=(\Gamma'((g\odot\nu)^\leftrightarrow\odot S))_{km}
+&=(\Gamma'(g^\leftrightarrow\odot (S\odot S))_{km}
 -\sum_{i=0}^{n-1}\sum_{x=0}^{\ell^2-1}g_x(S\odot S)_{xi}S_{xm}\Gamma_{xk}\cr
-&=(\Gamma'((g\odot\nu)^\leftrightarrow\odot S))_{km}-
+&=(\Gamma'(g^\leftrightarrow\odot (S\odot S))_{km}-
 (\Gamma'[(g\odot(S\odot S)^-)^\leftrightarrow\odot S])_{km},\cr}$$
 where given a matrix $A$ we denote with $A^-$ the column vector obtained from
 $A$ by adding the columns together: $(A^-)_i=\sum_j A_{ij}$.
 Then putting everything together we eventually end up with:
 $$\eqalign{
 {1\over h}{\partial\Phi\over\partial Q}=&
-(\Gamma'(g\odot\nu))\otimes(S'g)-
+(g^\leftrightarrow\odot\Gamma)'(S\odot (S'g)^{\updownarrow})-
 \Gamma'[(g\odot(SS'g))^\leftrightarrow\odot S]\cr
-&-\lambda_C\big(\Gamma'((g\odot\nu)^\leftrightarrow\odot S)-
+&-\lambda_C\big(\Gamma'(g^\leftrightarrow\odot (S\odot S))-
 \Gamma'[(g\odot(S\odot S)^-)^\leftrightarrow\odot S]
-\big);\cr}$$
-where $\otimes$ is the tensor (outer) product between two vectors:
-$(v\otimes w)_{ij}=v_i w_j$.
+\big).\cr}$$
+This form has been checked with the following  Matlab script; we highlight
+in red the changes.
+\begintt
+| clear all;
+
+| % parameters
+| wh = 10;
+| vol = 9;
+| m = 3;
+| lambdaC = 1.0;
+ 
+| % main matrices and vectors
+| C = randn(wh,vol);
+| Q = randn(vol,m);
+| A = C*Q;
+| S = exp(A) ./ (sum(exp(A),2));
+| g = repmat(1/wh,wh,1);
+ 
+| % custom matrices and vectors
+| eA = exp(A);
+ 
+| % case a |textRed
+| a1 = (repmat(g,1,vol).*C)'*(S.*repmat((S'*g)',wh,1))...
+|       -C'*(repmat(g.*(S*(S'*g)),1,m).*S);
+| a2 = C'*(repmat(g,1,m).*(S.*S))-C'*(repmat(g.*sum(S.*S,2),1,m).*S);
+| a = (a1 - lambdaC*a2);
+|textBlack 
+| % case b
+| b = zeros(vol,m);|textRed
+| gs=zeros(m,1);
+| for i=1:m
+| for y = 1:wh
+|     gs(i) = gs(i)+g(y)*S(y,i);
+| end
+| end|textBlack
+ 
+| for k = 1:vol
+|     for z = 1:m
+|         for i = 1:m
+|             for x = 1:wh
+|                 b(k,z) = b(k,z) + g(x) ...
+|                     * (gs(i)-lambdaC*S(x,i)) ...|textRed
+|                     * (double(i==z)*S(x,i)-S(x,i)*S(x,z)) ...|textBlack
+|                     * C(x,k);
+|             end
+|         end
+|     end
+| end
+ 
+| % compare cases
+| mc = max(max(abs(a-b)));
+| sc = (sum(sum((a > 0) .* (b > 0))) + sum(sum((a < 0) .* (b < 0))))/(vol*m);
+| fprintf("Max diff = %f, Coherent sign = %f percent\n", mc, sc*100);
+\endtt
+
+We can now continue and show how all the other terms can be
+rewritten with the same notation.
+
 \bye
