@@ -284,7 +284,7 @@ in red the changes.
  
 | % compare cases
 | mc = max(max(abs(a-b)));
-| sc = (sum(sum((a > 0) .* (b > 0))) + sum(sum((a < 0) .* (b < 0))))/(wh*m);
+| sc = (sum(sum((a > 0) .* (b > 0))) + sum(sum((a < 0) .* (b < 0))))/(vol*m);
 | fprintf("Max diff = %f, Coherent sign = %f percent\n", mc, sc*100);
 \endtt
 
