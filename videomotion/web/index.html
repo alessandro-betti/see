@@ -186,7 +186,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -208,7 +208,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -244,7 +244,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -286,7 +286,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -401,7 +401,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -490,7 +490,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -698,7 +698,7 @@
                     if (!_error) {
                         _error = true;
                         do_action("stop");
-                        alert("Error while receiving data from server");
+                        //alert("Error while receiving data from server");
                     }
                 }
             });
@@ -787,11 +787,11 @@
 <body>
 <form>
     Frame: <input type="text" id="text_cur_frame" value="1"/>/<input type="text" id="text_frames" readonly/>
-    <input type="button" id="button_prev" value="<< Previous" onclick="{ _error = false; do_action('prev'); }"/>
-    <input type="button" id="button_refresh" value="Refresh" onclick="{ _error = false; do_action('refresh'); }"/>
-    <input type="button" id="button_next" value="Next >>" onclick="{ _error = false; do_action('next'); }"/>
-    <input type="button" id="button_play" value="Play" onclick="{ _error = false; do_action('play'); }"/>
-    <input type="button" id="button_stop" value="Stop" onclick="{ _error = false; do_action('stop'); }"/>
+    <input type="button" id="button_prev" value="<< Previous" onclick="{ if (_error) reset_all_canvas(); _error = false; do_action('prev'); }"/>
+    <input type="button" id="button_refresh" value="Refresh" onclick="{ if (_error) reset_all_canvas(); _error = false; do_action('refresh'); }"/>
+    <input type="button" id="button_next" value="Next >>" onclick="{ if (_error) reset_all_canvas(); _error = false; do_action('next'); }"/>
+    <input type="button" id="button_play" value="Play" onclick="{ if (_error) reset_all_canvas(); _error = false; do_action('play'); }"/>
+    <input type="button" id="button_stop" value="Stop" onclick="{ if (_error) reset_all_canvas(); _error = false; do_action('stop'); }"/>
     <br/>
     Resolution: <input type="text" id="text_resolution" readonly/>
     Fps: <input type="text" id="text_fps"/>
@@ -803,7 +803,7 @@
     <input type="checkbox" id="checkbox_filters" checked onclick="{ _visu_changed = true; }">Filters
     <br/>
     Features: <input type="text" id="text_features_range" value="1-1"/>
-    <input type="checkbox" id="checkbox_features_normalization" checked onclick="{ _visu_changed = true; }">Min-Max Features/Filters
+    <input type="checkbox" id="checkbox_features_normalization" onclick="{ _visu_changed = true; }">Min-Max Features/Filters
     <input type="checkbox" id="checkbox_motion_map" checked onclick="{ _visu_changed = true; }">Motion Map
 </form>
 <table class="tableStyle" id="main_table">
