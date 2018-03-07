@@ -496,7 +496,12 @@ class FeatureExtractor:
                 nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
                 F = ((self.lambdaE - self.lambdaC) / (self.m * self.alpha)) * b + nab_ws
             else:
-                F = tf.gradients(self.lambdaC * 0.5 * ce + self.lambdaE * 0.5 * minus_ge, q1)[0]
+                g=1.0/self.g_scale
+                Sg=tf.expand_dims(tf.reduce_sum(feature_maps*g,0),0)
+                Ss=feature_maps*feature_maps*g
+                F_ge=feature_maps*(Sg*g)-tf.matmul(feature_maps,Sg*g,transpose_b=True)*feature_maps
+                F_ce=-Ss+feature_maps*tf.expand_dims(tf.reduce_sum(Ss,1),1)
+                F=tf.matmul(frame_patches,self.lambdaE*F_ge+self.lambdaC*F_ce,transpose_a=True)
 
             # update terms
             gradient_like1 = -q2
