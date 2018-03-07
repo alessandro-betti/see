@@ -39,6 +39,7 @@ def main(filename, file_dir, arguments):
     beta = 1.0   # weight of the norm of the first derivative q^(1)
     gamma = 2.0   # weight of the mixed-product first-second derivatives q^(2)q^(1)
     theta = 1.0   # exp(theta x t)
+    thetanight = 1.0  # dissipation at night
     lambda0 = 10.0  # be positive
     lambda1 = 10.0  # sum to 1
     lambdaM = 1.0  # motion constraint
@@ -70,7 +71,7 @@ def main(filename, file_dir, arguments):
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
-                        "gray=", "f=", "m=", "init_q=", "theta=", "alpha=", "beta=",
+                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "beta=",
                         "k=", "gamma=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "all_black=", "init_fixed=", "check_params=",
@@ -81,7 +82,7 @@ def main(filename, file_dir, arguments):
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
                    "edge of a filter (example for a 3x3 filter: 3)", "number of features",
                    "maximum absolute value of initial components of q",
-                   "exp(theta x t)", "weight of the norm of the second derivative of q",
+                   "exp(theta x t)", "exp(thetanight x t)", "weight of the norm of the second derivative of q",
                    "weight of the norm of the first derivative of q", "weight of the norm of q",
                    "weight of the mixed-product first-second derivatives", "weight of the positivity constraint",
                    "weight of the sum-to-1 constraint", "weight of the conditional entropy",
@@ -156,6 +157,8 @@ def main(filename, file_dir, arguments):
                 init_q = float(arg)
             elif opt == '--theta':
                 theta = float(arg)
+            elif opt == '--thetanight':
+                thetanight = float(arg)
             elif opt == '--alpha':
                 alpha = float(arg)
             elif opt == '--beta':
@@ -312,6 +315,7 @@ def main(filename, file_dir, arguments):
                'shannon': shannon,
                'init_q': init_q,
                'theta': theta,
+               'thetanight': thetanight,
                'alpha': alpha,
                'beta': beta,
                'k': k,

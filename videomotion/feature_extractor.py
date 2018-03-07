@@ -26,6 +26,7 @@ class FeatureExtractor:
         self.alpha = options['alpha']
         self.beta = options['beta']
         self.theta = options['theta']
+        self.thetanight = options['thetanight']
         self.k = options['k']
         self.softmax = options['softmax']
         self.gamma = options['gamma']
@@ -56,7 +57,8 @@ class FeatureExtractor:
 
         # in case of gradient-like optimization, disable some terms by zeroing their coefficients
         if self.grad:
-            self.theta = 0.0
+            self.theta = 0.0  # here
+            self.thetanight = 0.0  # here
             self.alpha = 1.0
             self.beta = 0.0
             self.lambdaM = 0.0
@@ -166,13 +168,13 @@ class FeatureExtractor:
             if self.k <= 0.0:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be > 0)")
 
-            val = self.beta/self.theta
+            val = self.beta / self.thetanight
             if self.gamma <= val:
                 raise ValueError("Invalid gamma: " + str(self.gamma) +
                                  " (it must be > beta/theta, where beta/theta = " + str(val) + ")")
 
-            val = ((self.beta - (self.gamma * self.theta)) *
-                   (self.beta - self.theta * (self.gamma + 2.0 * self.alpha * self.theta))) / (4.0 * self.alpha)
+            val = ((self.beta - (self.gamma * self.thetanight)) *
+                   (self.beta - self.thetanight * (self.gamma + 2.0 * self.alpha * self.thetanight))) / (4.0 * self.alpha)
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
@@ -268,6 +270,12 @@ class FeatureExtractor:
                 it_will_be_night = is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
             else:
                 it_will_be_night = 0.0
+
+            # Using the right theta
+            if is_night:
+                TH = self.thetanight
+            else:
+                TH = self.theta
 
             # blurring
             frame_1 = (1.0 - it_will_be_night) * rho * frame_1
@@ -440,28 +448,28 @@ class FeatureExtractor:
 
             # checking constants
             assert (not np.isnan((self.k / self.alpha))) and (np.isfinite((self.k / self.alpha)))
-            assert (not np.isnan((self.lambdaM * self.theta) / self.alpha)) and \
-                   (np.isfinite((self.lambdaM * self.theta) / self.alpha))
+            assert (not np.isnan((self.lambdaM * TH) / self.alpha)) and \
+                   (np.isfinite((self.lambdaM * TH) / self.alpha))
             assert (not np.isnan(self.lambdaM / self.alpha)) and (np.isfinite(self.lambdaM / self.alpha))
             assert (not np.isnan(1.0 / self.alpha)) and (np.isfinite(1.0 / self.alpha))
             assert (not np.isnan(self.lambda0 / self.alpha)) and (np.isfinite(self.lambda0 / self.alpha))
             assert (not np.isnan(self.lambdaM / self.alpha)) and (np.isfinite(self.lambdaM / self.alpha))
             assert (not np.isnan(self.lambda1 / self.alpha)) and (np.isfinite(self.lambda1 / self.alpha))
-            assert (not np.isnan((self.gamma / self.alpha) * self.theta * self.theta -
-                                 (self.beta / self.alpha) * self.theta - (self.lambdaM / self.alpha) * self.theta)) \
+            assert (not np.isnan((self.gamma / self.alpha) * TH * TH -
+                                 (self.beta / self.alpha) * TH - (self.lambdaM / self.alpha) * TH)) \
                 and \
-                   (np.isfinite((self.gamma / self.alpha) * self.theta * self.theta
-                                - (self.beta / self.alpha) * self.theta - (self.lambdaM / self.alpha) * self.theta))
-            assert (not np.isnan(self.theta * self.theta + (self.gamma / self.alpha) * self.theta
+                   (np.isfinite((self.gamma / self.alpha) * TH * TH
+                                - (self.beta / self.alpha) * TH - (self.lambdaM / self.alpha) * TH))
+            assert (not np.isnan(TH * TH + (self.gamma / self.alpha) * TH
                                  - (self.beta / self.alpha))) and \
-                   (np.isfinite(self.theta * self.theta + (self.gamma / self.alpha) * self.theta
+                   (np.isfinite(TH * TH + (self.gamma / self.alpha) * TH
                                 - (self.beta / self.alpha)))
-            assert (not np.isnan(2 * self.theta)) and (np.isfinite(2 * self.theta))
+            assert (not np.isnan(2 * TH)) and (np.isfinite(2 * TH))
             assert (not np.isnan((1.0 - self.lambdaC) / self.m)) and (np.isfinite((1.0 - self.lambdaC) / self.m))
 
             # D (this is just a portion of the D matrix in the paper)
             D = (self.k / self.alpha) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM * self.theta) / self.alpha) * N_block_1_trans \
+                - ((self.lambdaM * TH) / self.alpha) * N_block_1_trans \
                 + (self.lambdaM / self.alpha) * tf.subtract(O_block, tf.transpose(N_block_dot)) \
 
             if not self.softmax:
@@ -475,21 +483,21 @@ class FeatureExtractor:
                 D_q1 = tf.matmul(D, q1)
 
             # C
-            C = (((self.gamma / self.alpha) * self.theta * self.theta) \
-                - (self.beta / self.alpha) * self.theta) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM / self.alpha) * self.theta) * M_block_1 \
+            C = (((self.gamma / self.alpha) * TH * TH) \
+                - (self.beta / self.alpha) * TH) * tf.cast(tf.eye(self.ffn), precision) \
+                - ((self.lambdaM / self.alpha) * TH) * M_block_1 \
                 - (self.lambdaM / self.alpha) * (M_block_dot + N_block_1_trans - N_block_1)
 
             C_q2 = tf.matmul(C, q2)
 
             # B
-            Bbb = (self.theta * self.theta + (self.gamma / self.alpha) * self.theta - (self.beta / self.alpha)) \
+            Bbb = (TH * TH + (self.gamma / self.alpha) * TH - (self.beta / self.alpha)) \
                   * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / self.alpha) * M_block_1
 
             B_q3 = tf.matmul(Bbb, q3)
 
             # A
-            A_q4 = tf.multiply(q4, 2.0 * self.theta)
+            A_q4 = tf.multiply(q4, 2.0 * TH)
 
             # F
             if not self.softmax:
