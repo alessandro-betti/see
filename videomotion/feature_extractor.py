@@ -15,7 +15,7 @@ class FeatureExtractor:
         # saving options (and other useful values) to direct attributes
         self.w = w
         self.h = h
-        self.wh = w*h  # number of pixels (per input channel)
+        self.wh = w * h  # number of pixels (per input channel)
         self.step_size = options['step_size']
         self.step_adapt = options['step_adapt']
         self.f = options['f']  # full edge of the filter (i.e., 3 in case of 3x3 filters)
