@@ -59,6 +59,7 @@ def main(filename, file_dir, arguments):
 
     step_adapt = False
     step_size = -1
+    step_size_night = -1
 
     resume = 0
     all_black = 0
@@ -74,7 +75,7 @@ def main(filename, file_dir, arguments):
                         "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "beta=",
                         "k=", "gamma=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
-                        "step_size=", "all_black=", "init_fixed=", "check_params=",
+                        "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=", "probA=", "probB=",
                         "step_adapt=", "save_scores_only=", "softmax=", "gew=", "shannon="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
@@ -94,6 +95,7 @@ def main(filename, file_dir, arguments):
                    "norm-bounds scaling factor during night",
                    "update factor for parameter rho",
                    "size of the step in the Euler's method (or learning rate in the gradient-based update)",
+                   "size of the step in the Euler's method (or learning rate in the gradient-based update) at night",
                    "force input to be all black",
                    "initialize all the components of q to init_q",
                    "check validity of the alpha, beta, gamma, theta, and k parameters (binary flag)",
@@ -189,6 +191,8 @@ def main(filename, file_dir, arguments):
                 lambdaE = float(arg)
             elif opt == '--step_size':
                 step_size = float(arg)
+            elif opt == '--step_size_night':
+                step_size_night = float(arg)
             elif opt == '--probA':
                 prob_a = float(arg)
             elif opt == '--probB':
@@ -277,6 +281,10 @@ def main(filename, file_dir, arguments):
             step_size = 1.0 / fps
         if step_size < 0.0:
             step_size = 0.01
+        if step_size_night < 0.0 < fps:
+            step_size_night = 1.0 / fps
+        if step_size_night < 0.0:
+            step_size_night = 0.01
     except ValueError as e:
         err(e)
         sys.exit(1)
@@ -331,6 +339,7 @@ def main(filename, file_dir, arguments):
                'zeta': zeta,
                'eta': eta,
                'step_size': step_size,
+               'step_size_night': step_size_night,
                'step_adapt': step_adapt,
                'all_black': all_black,
                'init_fixed': init_fixed,

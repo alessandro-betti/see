@@ -17,6 +17,7 @@ class FeatureExtractor:
         self.h = h
         self.wh = w * h  # number of pixels (per input channel)
         self.step_size = options['step_size']
+        self.step_size_night = options['step_size_night']
         self.step_adapt = options['step_adapt']
         self.f = options['f']  # full edge of the filter (i.e., 3 in case of 3x3 filters)
         self.n = options['n']  # input channels/features
@@ -198,18 +199,6 @@ class FeatureExtractor:
             is_night = tf.get_variable("night", (), dtype=precision,
                                        initializer=tf.constant_initializer(0.0, dtype=precision))
 
-            # "optimization"-related
-            obj_values = tf.get_variable("obj_values", [12], dtype=precision,
-                                         initializer=tf.constant_initializer(0.0, dtype=precision))
-            step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size2 = tf.get_variable("step_size2", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size3 = tf.get_variable("step_size3", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size4 = tf.get_variable("step_size4", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-
             # variables that store what has been computed in the previous frame
             frame_0 = tf.get_variable("frame_0", [1, self.h, self.w, self.n], dtype=precision,
                                       initializer=tf.zeros_initializer)
@@ -271,11 +260,25 @@ class FeatureExtractor:
             else:
                 it_will_be_night = 0.0
 
-            # Using the right theta
-            if it_will_be_night:
+            # Using the right theta and step-size
+            if it_will_be_night == 1.0:
                 TH = self.thetanight
+                STEP = self.step_size_night
             else:
                 TH = self.theta
+                STEP = self.step_size
+
+            # "optimization"-related
+            obj_values = tf.get_variable("obj_values", [12], dtype=precision,
+                                         initializer=tf.constant_initializer(0.0, dtype=precision))
+            step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(STEP, dtype=precision))
+            step_size2 = tf.get_variable("step_size2", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(STEP, dtype=precision))
+            step_size3 = tf.get_variable("step_size3", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(STEP, dtype=precision))
+            step_size4 = tf.get_variable("step_size4", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(STEP, dtype=precision))
 
             # blurring
             frame_1 = (1.0 - it_will_be_night) * rho * frame_1
@@ -504,12 +507,12 @@ class FeatureExtractor:
                 nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
                 F = ((self.lambdaE - self.lambdaC) / (self.m * self.alpha)) * b + nab_ws
             else:
-                g = 1.0/self.g_scale
-                Sg = tf.expand_dims(tf.reduce_sum(feature_maps*g,0),0)
-                Ss = feature_maps*feature_maps*g
-                F_ge = feature_maps*(Sg*g)-tf.matmul(feature_maps,Sg*g,transpose_b=True)*feature_maps
-                F_ce = -Ss+feature_maps*tf.expand_dims(tf.reduce_sum(Ss,1),1)
-                F = tf.matmul(frame_patches,self.lambdaE*F_ge+self.lambdaC*F_ce,transpose_a=True)
+                g = 1.0 / self.g_scale
+                Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
+                Ss = feature_maps * feature_maps * g
+                F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
+                F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
+                F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
 
             # update terms
             gradient_like1 = -q2
@@ -523,22 +526,22 @@ class FeatureExtractor:
                 reduce1 = 1.0 - increase1
                 step_size1 = tf.assign(step_size1,
                                        tf.minimum(tf.maximum(step_size1 * 0.1 * reduce1 + step_size1 * 2.0 * increase1,
-                                                             self.step_size), self.step_size * 1000))
+                                                             STEP), STEP * 1000))
                 increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
                 reduce2 = 1.0 - increase2
                 step_size2 = tf.assign(step_size2,
                                        tf.minimum(tf.maximum(step_size2 * 0.1 * reduce2 + step_size2 * 2.0 * increase2,
-                                                             self.step_size), self.step_size * 1000))
+                                                             STEP), STEP * 1000))
                 increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
                 reduce3 = 1.0 - increase3
                 step_size3 = tf.assign(step_size3,
                                        tf.minimum(tf.maximum(step_size3 * 0.1 * reduce3 + step_size3 * 2.0 * increase3,
-                                                             self.step_size), self.step_size * 1000))
+                                                             STEP), STEP * 1000))
                 increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
                 reduce4 = 1.0 - increase4
                 step_size4 = tf.assign(step_size4,
                                        tf.minimum(tf.maximum(step_size4 * 0.1 * reduce4 + step_size4 * 2.0 * increase4,
-                                                             self.step_size), self.step_size * 1000))
+                                                             STEP), STEP * 1000))
 
             # update rules
             with tf.control_dependencies([step_size1, step_size2, step_size3, step_size4]):
