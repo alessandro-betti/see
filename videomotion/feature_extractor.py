@@ -199,6 +199,18 @@ class FeatureExtractor:
             is_night = tf.get_variable("night", (), dtype=precision,
                                        initializer=tf.constant_initializer(0.0, dtype=precision))
 
+            # "optimization"-related
+            obj_values = tf.get_variable("obj_values", [12], dtype=precision,
+                                         initializer=tf.constant_initializer(0.0, dtype=precision))
+            step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
+            step_size2 = tf.get_variable("step_size2", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
+            step_size3 = tf.get_variable("step_size3", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
+            step_size4 = tf.get_variable("step_size4", [self.ffn, self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
+
             # variables that store what has been computed in the previous frame
             frame_0 = tf.get_variable("frame_0", [1, self.h, self.w, self.n], dtype=precision,
                                       initializer=tf.zeros_initializer)
@@ -262,23 +274,37 @@ class FeatureExtractor:
 
             # Using the right theta and step-size
             if it_will_be_night == 1.0:
-                TH = self.thetanight
-                STEP = self.step_size_night
-            else:
-                TH = self.theta
-                STEP = self.step_size
+                if is_day:
+                    TH = self.thetanight
+                    STEP = self.step_size_night
 
-            # "optimization"-related
-            obj_values = tf.get_variable("obj_values", [12], dtype=precision,
-                                         initializer=tf.constant_initializer(0.0, dtype=precision))
-            step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(STEP, dtype=precision))
-            step_size2 = tf.get_variable("step_size2", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(STEP, dtype=precision))
-            step_size3 = tf.get_variable("step_size3", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(STEP, dtype=precision))
-            step_size4 = tf.get_variable("step_size4", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(STEP, dtype=precision))
+                    step_mat = tf.ones_like(step_size1) * STEP
+                    step_size1 = tf.assign(step_size1, step_mat)
+                    step_size2 = tf.assign(step_size2, step_mat)
+                    step_size3 = tf.assign(step_size3, step_mat)
+                    step_size4 = tf.assign(step_size4, step_mat)
+
+                    zero_mat = tf.zeros_like(gradient_like1_0)
+                    gradient_like1_0 = tf.assign(gradient_like1_0, zero_mat)
+                    gradient_like2_0 = tf.assign(gradient_like2_0, zero_mat)
+                    gradient_like3_0 = tf.assign(gradient_like3_0, zero_mat)
+                    gradient_like4_0 = tf.assign(gradient_like4_0, zero_mat)
+            else:
+                if is_night:
+                    TH = self.theta
+                    STEP = self.step_size
+
+                    step_mat = tf.ones_like(step_size1) * STEP
+                    step_size1 = tf.assign(step_size1, step_mat)
+                    step_size2 = tf.assign(step_size2, step_mat)
+                    step_size3 = tf.assign(step_size3, step_mat)
+                    step_size4 = tf.assign(step_size4, step_mat)
+
+                    zero_mat = tf.zeros_like(gradient_like1_0)
+                    gradient_like1_0 = tf.assign(gradient_like1_0, zero_mat)
+                    gradient_like2_0 = tf.assign(gradient_like2_0, zero_mat)
+                    gradient_like3_0 = tf.assign(gradient_like3_0, zero_mat)
+                    gradient_like4_0 = tf.assign(gradient_like4_0, zero_mat)
 
             # blurring
             frame_1 = (1.0 - it_will_be_night) * rho * frame_1
