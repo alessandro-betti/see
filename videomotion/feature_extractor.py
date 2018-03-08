@@ -273,38 +273,24 @@ class FeatureExtractor:
                 it_will_be_night = 0.0
 
             # Using the right theta and step-size
-            if it_will_be_night == 1.0:
-                if is_day:
-                    TH = self.thetanight
-                    STEP = self.step_size_night
+            conditioned_step_size = (self.step_size * (1.0 - it_will_be_night)
+                                     + self.step_size_night * it_will_be_night)
+            conditioned_theta = (self.theta * (1.0 - it_will_be_night)
+                                 + self.thetanight * it_will_be_night)
+            condition_go_to_night = it_will_be_night * is_day
+            condition_go_to_day = (1.0 - it_will_be_night) * is_night
+            condition_switch = condition_go_to_night + condition_go_to_day
 
-                    step_mat = tf.ones_like(step_size1) * STEP
-                    step_size1 = tf.assign(step_size1, step_mat)
-                    step_size2 = tf.assign(step_size2, step_mat)
-                    step_size3 = tf.assign(step_size3, step_mat)
-                    step_size4 = tf.assign(step_size4, step_mat)
-
-                    zero_mat = tf.zeros_like(gradient_like1_0)
-                    gradient_like1_0 = tf.assign(gradient_like1_0, zero_mat)
-                    gradient_like2_0 = tf.assign(gradient_like2_0, zero_mat)
-                    gradient_like3_0 = tf.assign(gradient_like3_0, zero_mat)
-                    gradient_like4_0 = tf.assign(gradient_like4_0, zero_mat)
-            else:
-                if is_night:
-                    TH = self.theta
-                    STEP = self.step_size
-
-                    step_mat = tf.ones_like(step_size1) * STEP
-                    step_size1 = tf.assign(step_size1, step_mat)
-                    step_size2 = tf.assign(step_size2, step_mat)
-                    step_size3 = tf.assign(step_size3, step_mat)
-                    step_size4 = tf.assign(step_size4, step_mat)
-
-                    zero_mat = tf.zeros_like(gradient_like1_0)
-                    gradient_like1_0 = tf.assign(gradient_like1_0, zero_mat)
-                    gradient_like2_0 = tf.assign(gradient_like2_0, zero_mat)
-                    gradient_like3_0 = tf.assign(gradient_like3_0, zero_mat)
-                    gradient_like4_0 = tf.assign(gradient_like4_0, zero_mat)
+            step_mat = tf.ones_like(step_size1) * conditioned_step_size
+            step_size1_reset = tf.assign(step_size1, step_size1 * (1.0 - condition_switch)
+                                         + step_mat * condition_switch)
+            step_size2_reset = tf.assign(step_size2, step_size2 * (1.0 - condition_switch)
+                                         + step_mat * condition_switch)
+            step_size3_reset = tf.assign(step_size3, step_size3 * (1.0 - condition_switch)
+                                         + step_mat * condition_switch)
+            step_size4_reset = tf.assign(step_size4, step_size4 * (1.0 - condition_switch)
+                                         + step_mat * condition_switch)
+            reset_step_size = [step_size1_reset, step_size2_reset, step_size3_reset, step_size4_reset]
 
             # blurring
             frame_1 = (1.0 - it_will_be_night) * rho * frame_1
@@ -475,30 +461,9 @@ class FeatureExtractor:
             M_block_1_q1 = tf.matmul(M_block_1, q1)  # filter_volume x m
             N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
 
-            # checking constants
-            assert (not np.isnan((self.k / self.alpha))) and (np.isfinite((self.k / self.alpha)))
-            assert (not np.isnan((self.lambdaM * TH) / self.alpha)) and \
-                   (np.isfinite((self.lambdaM * TH) / self.alpha))
-            assert (not np.isnan(self.lambdaM / self.alpha)) and (np.isfinite(self.lambdaM / self.alpha))
-            assert (not np.isnan(1.0 / self.alpha)) and (np.isfinite(1.0 / self.alpha))
-            assert (not np.isnan(self.lambda0 / self.alpha)) and (np.isfinite(self.lambda0 / self.alpha))
-            assert (not np.isnan(self.lambdaM / self.alpha)) and (np.isfinite(self.lambdaM / self.alpha))
-            assert (not np.isnan(self.lambda1 / self.alpha)) and (np.isfinite(self.lambda1 / self.alpha))
-            assert (not np.isnan((self.gamma / self.alpha) * TH * TH -
-                                 (self.beta / self.alpha) * TH - (self.lambdaM / self.alpha) * TH)) \
-                and \
-                   (np.isfinite((self.gamma / self.alpha) * TH * TH
-                                - (self.beta / self.alpha) * TH - (self.lambdaM / self.alpha) * TH))
-            assert (not np.isnan(TH * TH + (self.gamma / self.alpha) * TH
-                                 - (self.beta / self.alpha))) and \
-                   (np.isfinite(TH * TH + (self.gamma / self.alpha) * TH
-                                - (self.beta / self.alpha)))
-            assert (not np.isnan(2 * TH)) and (np.isfinite(2 * TH))
-            assert (not np.isnan((1.0 - self.lambdaC) / self.m)) and (np.isfinite((1.0 - self.lambdaC) / self.m))
-
             # D (this is just a portion of the D matrix in the paper)
             D = (self.k / self.alpha) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM * TH) / self.alpha) * N_block_1_trans \
+                - ((self.lambdaM * conditioned_theta) / self.alpha) * N_block_1_trans \
                 + (self.lambdaM / self.alpha) * tf.subtract(O_block, tf.transpose(N_block_dot)) \
 
             if not self.softmax:
@@ -512,21 +477,22 @@ class FeatureExtractor:
                 D_q1 = tf.matmul(D, q1)
 
             # C
-            C = (((self.gamma / self.alpha) * TH * TH) \
-                - (self.beta / self.alpha) * TH) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM / self.alpha) * TH) * M_block_1 \
+            C = (((self.gamma / self.alpha) * conditioned_theta * conditioned_theta) \
+                - (self.beta / self.alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
+                - ((self.lambdaM / self.alpha) * conditioned_theta) * M_block_1 \
                 - (self.lambdaM / self.alpha) * (M_block_dot + N_block_1_trans - N_block_1)
 
             C_q2 = tf.matmul(C, q2)
 
             # B
-            Bbb = (TH * TH + (self.gamma / self.alpha) * TH - (self.beta / self.alpha)) \
+            Bbb = (conditioned_theta * conditioned_theta + (self.gamma / self.alpha) * conditioned_theta
+                   - (self.beta / self.alpha)) \
                   * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / self.alpha) * M_block_1
 
             B_q3 = tf.matmul(Bbb, q3)
 
             # A
-            A_q4 = tf.multiply(q4, 2.0 * TH)
+            A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
 
             # F
             if not self.softmax:
@@ -547,27 +513,32 @@ class FeatureExtractor:
             gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
 
             # step sizes
-            if self.step_adapt:
-                increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
-                reduce1 = 1.0 - increase1
-                step_size1 = tf.assign(step_size1,
-                                       tf.minimum(tf.maximum(step_size1 * 0.1 * reduce1 + step_size1 * 2.0 * increase1,
-                                                             STEP), STEP * 1000))
-                increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
-                reduce2 = 1.0 - increase2
-                step_size2 = tf.assign(step_size2,
-                                       tf.minimum(tf.maximum(step_size2 * 0.1 * reduce2 + step_size2 * 2.0 * increase2,
-                                                             STEP), STEP * 1000))
-                increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
-                reduce3 = 1.0 - increase3
-                step_size3 = tf.assign(step_size3,
-                                       tf.minimum(tf.maximum(step_size3 * 0.1 * reduce3 + step_size3 * 2.0 * increase3,
-                                                             STEP), STEP * 1000))
-                increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
-                reduce4 = 1.0 - increase4
-                step_size4 = tf.assign(step_size4,
-                                       tf.minimum(tf.maximum(step_size4 * 0.1 * reduce4 + step_size4 * 2.0 * increase4,
-                                                             STEP), STEP * 1000))
+            with tf.control_dependencies(reset_step_size):
+                if self.step_adapt:
+                    increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
+                    reduce1 = 1.0 - increase1
+                    step_size1 = tf.assign(step_size1,
+                                           tf.minimum(tf.maximum(step_size1 * 0.1 * reduce1 +
+                                                                 step_size1 * 2.0 * increase1,
+                                                                 conditioned_step_size), conditioned_step_size * 1000))
+                    increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
+                    reduce2 = 1.0 - increase2
+                    step_size2 = tf.assign(step_size2,
+                                           tf.minimum(tf.maximum(step_size2 * 0.1 * reduce2 +
+                                                                 step_size2 * 2.0 * increase2,
+                                                                 conditioned_step_size), conditioned_step_size * 1000))
+                    increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
+                    reduce3 = 1.0 - increase3
+                    step_size3 = tf.assign(step_size3,
+                                           tf.minimum(tf.maximum(step_size3 * 0.1 * reduce3 +
+                                                                 step_size3 * 2.0 * increase3,
+                                                                 conditioned_step_size), conditioned_step_size * 1000))
+                    increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
+                    reduce4 = 1.0 - increase4
+                    step_size4 = tf.assign(step_size4,
+                                           tf.minimum(tf.maximum(step_size4 * 0.1 * reduce4 +
+                                                                 step_size4 * 2.0 * increase4,
+                                                                 conditioned_step_size), conditioned_step_size * 1000))
 
             # update rules
             with tf.control_dependencies([step_size1, step_size2, step_size3, step_size4]):
