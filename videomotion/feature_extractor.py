@@ -171,7 +171,7 @@ class FeatureExtractor:
             val = self.beta / self.thetanight
             if self.gamma <= val:
                 raise ValueError("Invalid gamma: " + str(self.gamma) +
-                                 " (it must be > beta/theta, where beta/theta = " + str(val) + ")")
+                                 " (it must be > beta/thetanight, where beta/thetanight = " + str(val) + ")")
 
             val = ((self.beta - (self.gamma * self.thetanight)) *
                    (self.beta - self.thetanight * (self.gamma + 2.0 * self.alpha * self.thetanight))) / (4.0 * self.alpha)
@@ -272,7 +272,7 @@ class FeatureExtractor:
                 it_will_be_night = 0.0
 
             # Using the right theta
-            if is_night:
+            if it_will_be_night:
                 TH = self.thetanight
             else:
                 TH = self.theta
