@@ -234,7 +234,9 @@ class OutputStream:
         self.__files_per_folder = self.files_per_folder
         self.__last_saved_frame_number = 0
         self.__options = {}
+        self.create_folders(purge_existing_data)
 
+    def create_folders(self, purge_existing_data):
         if not os.path.exists(self.folder):
             os.makedirs(self.folder)
         elif purge_existing_data:
@@ -310,3 +312,6 @@ class OutputStream:
             raise IOError("Cannot access: " + self.folder + os.sep + "options.txt")
         json.dump(self.__options, f, indent=4)
         f.close()
+
+    def set_frame_number(self, last_frame_number):
+        self.__last_saved_frame_number = last_frame_number - 1

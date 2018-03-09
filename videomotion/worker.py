@@ -9,7 +9,7 @@ import json
 class Worker:
 
     def __init__(self, input_stream, output_stream, w=-1, h=-1, fps=-1, frames=-1,
-                 force_gray=False, repetitions=1, options=None, resume=False):
+                 force_gray=False, repetitions=1, options=None, resume=False, reset_stream_when_resuming=False):
         self.input_stream = input_stream
         self.output_stream = output_stream
         self.w = w
@@ -30,7 +30,7 @@ class Worker:
 
         if resume:
             out("RESUMING...")
-            self.load()
+            self.load(reset_stream_when_resuming)
 
     def close(self):
         self.fe.close()
@@ -46,20 +46,29 @@ class Worker:
         json.dump(info, f, indent=4)
         f.close()
 
-    def load(self):
-        f = open(self.fe.save_path + ".info.txt", "r")
-        if f is None or not f or f.closed:
-            raise IOError("Cannot access: " + self.fe.save_path + ".info.txt")
-        info = json.load(f)
-        f.close()
+    def load(self, reset_stream=False):
+        if not reset_stream:
+            f = open(self.fe.save_path + ".info.txt", "r")
+            if f is None or not f or f.closed:
+                raise IOError("Cannot access: " + self.fe.save_path + ".info.txt")
+            info = json.load(f)
+            f.close()
 
-        self.steps = info['steps']
+            self.steps = info['steps']
+            self.fe.load(self.steps)
 
-        self.fe.load(self.steps)
+            self.input_stream.set_frame_number(info['frame'] - 1, self.w, self.h, self.fps,
+                                               self.frames, self.force_gray)
+            current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps,
+                                                                 self.frames, self.force_gray)
+            self.__previous_img = current_img
 
-        self.input_stream.set_frame_number(info['frame'] - 1, self.w, self.h, self.fps, self.frames, self.force_gray)
-        current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps, self.frames, self.force_gray)
-        self.__previous_img = current_img
+            self.output_stream.set_frame_number(info['frame'])
+        else:
+            self.steps = 0.0
+            self.fe.load(1)
+            self.output_stream.create_folders(True)  # clearing folders and recreating them
+            self.fe.activate_tensor_board()
 
     def run_step(self):
 
@@ -98,7 +107,7 @@ class Worker:
             features, filters, mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, \
                 norm_q_dot_dot, \
                 norm_q_dot_dot_dot, norm_q_mixed, all_terms, is_night, \
-                next_rho = self.fe.run_step(self.__previous_img, current_img, current_of)
+                next_rho, mi_real_full, motion_full = self.fe.run_step(self.__previous_img, current_img, current_of)
 
             # output-info
             if is_night == 1.0:
@@ -107,6 +116,7 @@ class Worker:
                 light = "day"
 
             out("\t[status=" + light + ", rho=" + str(self.__rho) + ", action_approx=" + str(all_terms)
+                + ", mi_real_full=" + str(mi_real_full) + ", motion_full=" + str(motion_full)
                 + ",\n\t mi_real=" + str(mi_real) + ", mi=" + str(mi) + ", ce=" + str(ce)
                 + ", minus_ge=" + str(minus_ge)
                 + ", sum1=" + str(sum_to_one)
@@ -140,6 +150,8 @@ class Worker:
             step_save_time = time.time()
             if not self.save_scores_only:
                 self.output_stream.save_next(current_img, current_of, features, filters, others)
+
+
             step_save_time = time.time() - step_save_time
 
             # saving a reference used by the next frame to process
@@ -165,8 +177,5 @@ class Worker:
             # stats
             step_time = time.time() - step_time
             self.__elapsed_time = time.time() - self.__start_time
-
-            # releasing the feature extractor
-            self.fe.close()
 
         return status, step_time, (step_time - step_save_time), (step_time - step_save_time - step_load_time)

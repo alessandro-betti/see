@@ -6,6 +6,8 @@ from worker import Worker
 from utils import out, err, warn
 from visuserver import VisualizationServer
 import json
+import signal
+from functools import partial
 
 
 def main(filename, file_dir, arguments):
@@ -55,7 +57,6 @@ def main(filename, file_dir, arguments):
     prob_a = -1.0  # eps-insensitive probabilistic constraint
     prob_b = -1.0  # eps-insensitive probabilistic constraint
     gew = 1.0  # weight to the last measurement of the entropy term (historical moving average)
-    shannon = False
 
     step_adapt = False
     step_size = -1
@@ -77,7 +78,7 @@ def main(filename, file_dir, arguments):
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=", "probA=", "probB=",
-                        "step_adapt=", "save_scores_only=", "softmax=", "gew=", "shannon="]
+                        "step_adapt=", "save_scores_only=", "softmax=", "gew="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
@@ -107,8 +108,7 @@ def main(filename, file_dir, arguments):
                    "use adaptive step_size (binary flag)",
                    "do not save output data, with the exception of the scalar scores (binary flag)",
                    "use the softmax activation (and Shannon's entropy)",
-                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)",
-                   "use the Shannon's entropy"]
+                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)"]
 
     if arguments is not None and len(arguments) > 0:
         try:
@@ -221,8 +221,6 @@ def main(filename, file_dir, arguments):
                 softmax = int(arg) > 0
             elif opt == '--gew':
                 gew = float(arg)
-            elif opt == '--shannon':
-                shannon = int(arg) > 0
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
@@ -320,7 +318,6 @@ def main(filename, file_dir, arguments):
                'n': c,
                'f': filter_size,
                'softmax': softmax,
-               'shannon': shannon,
                'init_q': init_q,
                'theta': theta,
                'thetanight': thetanight,
@@ -372,9 +369,16 @@ def main(filename, file_dir, arguments):
         output_stream.save_option("url", "http://" + str(visualization_server.ip) + ":"
                                   + str(visualization_server.port))
 
+    status = [True]
+
+    def interruption(status_array, signal, frame):
+        status_array[0] = False
+
     # creating the real worker
     try:
-        worker = Worker(input_stream, output_stream, w, h, fps, frames, force_gray, repetitions, options, resume > 0)
+        worker = Worker(input_stream, output_stream, w, h, fps, frames, force_gray, repetitions, options,
+                        resume > 0, resume > 1)
+        signal.signal(signal.SIGINT, partial(interruption, status))
     except ValueError as e:
         err(e)
         if not save_scores_only:
@@ -383,10 +387,11 @@ def main(filename, file_dir, arguments):
 
     # main loop
     out("Operations are now starting...")
-    status = True
-    while status:
+
+    while status[0]:
         try:
-            status, frame_time, frame_time_no_save_io, frame_time_no_io = worker.run_step()
+            status_new, frame_time, frame_time_no_save_io, frame_time_no_io = worker.run_step()
+            status[0] = status[0] * status_new
         except ValueError as e:
             try:
                 worker.close()
@@ -397,12 +402,14 @@ def main(filename, file_dir, arguments):
             if not save_scores_only:
                 visualization_server.close()
             sys.exit(1)
-        if status:
+
+        if status_new:
             out("Processed frame " + str(int(worker.steps)) + "/" + str(tot_frames) +
                 " [frame_time: " + "{0:.3f}".format(frame_time) + " (" +
                 "{0:.3f}".format(frame_time_no_save_io) + "), avg_fps: " + "{0:.3f}".format(worker.measured_fps) + "]")
+    worker.save()
     worker.close()
-    out("Done!")
+    out("Done! (model saved)")
 
     # fixing errors in the frame count procedure
     if worker.steps != tot_frames:

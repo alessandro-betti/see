@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import shutil
-# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0
+# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0 --shannon 1
 
 
 class FeatureExtractor:
@@ -49,9 +49,10 @@ class FeatureExtractor:
         self.grad = options['grad']
         self.prob_a = options['prob_a']
         self.prob_b = options['prob_b']
-        self.shannon = options['shannon']
         self.prob_range = self.prob_a > 0.0 and self.prob_b > 0.0
+        self.root = options['root']
         self.resume = resume
+        self.summary_writer = None
 
         # attention function
         self.g_scale = self.wh  # uniform scaling due to the "gx" function
@@ -68,17 +69,14 @@ class FeatureExtractor:
 
         # TensorFlow session and graph
         self.sess = tf.Session()
-        self.process_frame_ops, self.frame_0_init_op, self.saver = self.__build_graph()
-
-        # TensorBoard-related
-        if os.path.exists(options['root'] + '/tensor_board'):
-            shutil.rmtree(options['root'] + '/tensor_board')
-        self.summary_writer = tf.summary.FileWriter(options['root'] + '/tensor_board', self.sess.graph)
+        self.process_frame_ops, self.frame_0_init_op, self.saver, self.t_reset_op = self.__build_graph()
+        self.activate_tensor_board()
 
         # TensorFlow model, save dir
         self.save_path = options['root'] + '/model/model.saved'
 
     def close(self):
+        self.summary_writer.close()
         self.sess.close()
 
     def save(self):
@@ -87,6 +85,11 @@ class FeatureExtractor:
     def load(self, steps):
         self.saver.restore(self.sess, self.save_path)
         self.step = steps
+
+    def activate_tensor_board(self):
+        if (not self.resume) and os.path.exists(self.root + '/tensor_board'):
+            shutil.rmtree(self.root + '/tensor_board')
+        self.summary_writer = tf.summary.FileWriter(self.root + '/tensor_board', self.sess.graph)
 
     # processing the current frame (frame_1 below)
     def run_step(self, frame_0_to_feed, frame_1_to_feed, motion_01_to_feed):
@@ -98,7 +101,7 @@ class FeatureExtractor:
             motion_01_to_feed.fill(0.0)
 
         # quantity: 1 / delta, where delta is the ratio for computing derivatives
-        if self.__first_frame:
+        if self.__first_frame and self.step == 1:
             one_over_delta = 0.0  # so derivatives will be zero
         else:
             one_over_delta = float(self.step_size)
@@ -116,13 +119,15 @@ class FeatureExtractor:
         # fixing the case of the first frame
         if self.__first_frame:
             self.sess.run(self.frame_0_init_op, feed_dict=feed_dict)
+            if self.step == 1:
+                self.sess.run(self.t_reset_op, feed_dict=feed_dict)
             self.__first_frame = False
 
         # running the computations over the TensorFlow graph
         feature_maps, filters_matrix, \
             mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
             norm_q_dot_dot_dot, \
-            norm_q_mixed, all_terms, is_night, rho, \
+            norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full, \
             summary_ops, fake_op = self.sess.run(self.process_frame_ops, feed_dict=feed_dict)
 
         # TensorBoard-related
@@ -134,7 +139,7 @@ class FeatureExtractor:
         # returning data (no output printing in this class, please!)
         return feature_maps, filters_matrix, \
             mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
-            norm_q_dot_dot, norm_q_mixed, all_terms, is_night, rho
+            norm_q_dot_dot, norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full
 
     def __check_params(self, skip_some_checks=False):
         if self.f < 3 or self.f % 2 == 0:
@@ -198,6 +203,13 @@ class FeatureExtractor:
                                   initializer=tf.constant_initializer(self.rho, dtype=precision))
             is_night = tf.get_variable("night", (), dtype=precision,
                                        initializer=tf.constant_initializer(0.0, dtype=precision))
+            t = tf.get_variable("t", (), dtype=precision, initializer=tf.constant_initializer(0.0, dtype=precision))
+            avg_p_full = tf.get_variable("avg_p_full", [self.m], dtype=precision,
+                                         initializer=tf.constant_initializer(0.0, dtype=precision))
+            avg_p_log_p_full = tf.get_variable("avg_p_log_p_full", [self.m], dtype=precision,
+                                               initializer=tf.constant_initializer(0.0, dtype=precision))
+            motion_full = tf.get_variable("motion_full", (), dtype=precision,
+                                          initializer=tf.constant_initializer(0.0, dtype=precision))
 
             # "optimization"-related
             obj_values = tf.get_variable("obj_values", [12], dtype=precision,
@@ -246,6 +258,7 @@ class FeatureExtractor:
 
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
             frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_0, 255.0), 0))
+            t_reset_op = tf.assign(t, 0.0)
             frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
             motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
 
@@ -344,19 +357,16 @@ class FeatureExtractor:
                 feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)  # wh x m
 
                 # objective function terms: ce, -ge, mi
-                if self.shannon:
-                    p = tf.maximum(feature_maps, 0.00001)
-                    p_log_p = tf.multiply(p, tf.div(tf.log(p), np.log(self.m)))  # wh x m
-                    biased_p = self.gew * p + (1.0 - self.gew) * feature_map_stats
-                    avg_p = tf.reduce_mean(biased_p, 0)  # m
-                    ce = -tf.reduce_sum(tf.reduce_mean(p_log_p, 0))
-                    minus_ge = tf.reduce_sum(tf.multiply(avg_p, tf.div(tf.log(avg_p), np.log(self.m))))
-                    mi = - ce - minus_ge
-                else:
-                    ce = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-                    minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))),
-                                      self.g_scale * self.g_scale)
-                    mi = - ce - minus_ge
+                biased_maps = self.gew * feature_maps + (1.0 - self.gew) * feature_map_stats
+                ce = -tf.div(tf.reduce_sum(tf.square(biased_maps)), self.g_scale)
+                minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))), self.g_scale * self.g_scale)
+
+                ce = (ce + 1.0) / self.m
+                minus_ge = (self.m * minus_ge - 1.0) / (self.m - 1)
+
+                mi = - ce - minus_ge
+
+                mi = mi + 1.0
 
                 # objective function terms: probabilistic constraints
                 sum_to_one = tf.cast(tf.identity(0.0), precision)
@@ -369,7 +379,13 @@ class FeatureExtractor:
                 ce = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
                 minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))),
                                   self.g_scale * self.g_scale)
+
+                ce = (ce + 1.0) / self.m
+                minus_ge = (self.m * minus_ge - 1.0) / (self.m - 1)
+
                 mi = - ce - minus_ge
+
+                mi = mi + 1.0
 
                 # masks for piecewise-linear constraints
                 if not self.prob_range:
@@ -415,8 +431,17 @@ class FeatureExtractor:
             log_p = tf.div(tf.log(p), np.log(self.m))  # wh x m
             p_log_p = tf.multiply(p, log_p)  # wh x m
             avg_p = tf.reduce_mean(p, 0)  # m
-            mi_real = tf.reduce_sum(tf.reduce_mean(p_log_p, 0)) - \
+            avg_p_log_p = tf.reduce_mean(p_log_p, 0)  # m
+            mi_real = tf.reduce_sum(avg_p_log_p) - \
                 tf.reduce_sum(tf.multiply(avg_p, tf.div(tf.log(avg_p), np.log(self.m))))
+
+            # updating stats
+            t_update = tf.assign_add(t, 1.0)
+            avg_p_full_update = tf.assign_add(avg_p_full, (avg_p - avg_p_full) / t_update)
+            avg_p_log_p_full_update = tf.assign_add(avg_p_log_p_full, (avg_p_log_p - avg_p_log_p_full) / t_update)
+            mi_real_full = tf.reduce_sum(avg_p_log_p_full_update) - \
+                tf.reduce_sum(tf.multiply(avg_p_full_update, tf.div(tf.log(avg_p_full_update), np.log(self.m))))
+            motion_full_update = tf.assign_add(motion_full, (motion - motion_full) / t_update)
 
             # TensorBoard-related
             tf.summary.scalar('J_Rho', rho)
@@ -432,6 +457,8 @@ class FeatureExtractor:
             tf.summary.scalar("M_NormQDotDot", norm_q_dot_dot)
             tf.summary.scalar("N_NormQDotDotDot", norm_q_dot_dot_dot)
             tf.summary.scalar("O_QDotQDotDot", norm_q_mixed)
+            tf.summary.scalar("P_RealMutualInformationFull", mi_real_full)
+            tf.summary.scalar("Q_MotionFull", motion_full_update)
             tf.summary.scalar("B_IsNight", it_will_be_night)
             tf.summary.scalar("A_FullObjectiveFunction", obj)
 
@@ -566,8 +593,8 @@ class FeatureExtractor:
                 up_gradient_like2 = tf.assign(gradient_like2_0, gradient_like2)
                 up_gradient_like3 = tf.assign(gradient_like3_0, gradient_like3)
                 up_gradient_like4 = tf.assign(gradient_like4_0, gradient_like4)
-                if self.softmax and self.shannon:
-                    up_feature_map_stats = tf.assign(feature_map_stats, biased_p)
+                if self.softmax:
+                    up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
                 else:
                     up_feature_map_stats = tf.eye(1)
 
@@ -597,6 +624,7 @@ class FeatureExtractor:
                    norm_q_mixed, obj,
                    up_night,
                    up_rho,
+                   mi_real_full, motion_full_update,
                    summary_ops,
                    fake_op]
 
@@ -606,7 +634,7 @@ class FeatureExtractor:
 
             saver = tf.train.Saver()
 
-        return ops, frame_0_init_op, saver
+        return ops, frame_0_init_op, saver, t_reset_op
 
     @staticmethod
     def __spatial_gradient(source, h, w, n):
