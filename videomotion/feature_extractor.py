@@ -281,7 +281,7 @@ class FeatureExtractor:
                 tf.cast(tf.less(norm_q_dot_dot_dot, self.eps3 * self.zeta), precision)
 
             if not self.day_only:
-                it_will_be_night = 1.0   # is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
+                it_will_be_night = is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
             else:
                 it_will_be_night = 0.0
 
