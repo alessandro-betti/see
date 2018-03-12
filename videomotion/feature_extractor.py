@@ -139,7 +139,7 @@ class FeatureExtractor:
         # returning data (no output printing in this class, please!)
         return feature_maps, filters_matrix, \
             mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
-            norm_q_dot_dot, norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full
+               norm_q_dot_dot_dot, norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full
 
     def __check_params(self, skip_some_checks=False):
         if self.f < 3 or self.f % 2 == 0:
@@ -281,7 +281,7 @@ class FeatureExtractor:
                 tf.cast(tf.less(norm_q_dot_dot_dot, self.eps3 * self.zeta), precision)
 
             if not self.day_only:
-                it_will_be_night = is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
+                it_will_be_night = 1.0   # is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
             else:
                 it_will_be_night = 0.0
 
@@ -456,7 +456,7 @@ class FeatureExtractor:
             tf.summary.scalar("L_NormQDot", norm_q_dot)
             tf.summary.scalar("M_NormQDotDot", norm_q_dot_dot)
             tf.summary.scalar("N_NormQDotDotDot", norm_q_dot_dot_dot)
-            tf.summary.scalar("O_QDotQDotDot", norm_q_mixed)
+            tf.summary.scalar("O_NormQDot_QDotDot", norm_q_mixed)
             tf.summary.scalar("P_RealMutualInformationFull", mi_real_full)
             tf.summary.scalar("Q_MotionFull", motion_full_update)
             tf.summary.scalar("B_IsNight", it_will_be_night)
@@ -568,7 +568,7 @@ class FeatureExtractor:
                                                                  conditioned_step_size), conditioned_step_size * 1000))
 
             # update rules
-            with tf.control_dependencies([step_size1, step_size2, step_size3, step_size4]):
+            with tf.control_dependencies(reset_step_size):
                 if not self.grad:
                     __updated_q4 = q4 - gradient_like4 * step_size4
                 else:
@@ -620,7 +620,7 @@ class FeatureExtractor:
             ops = [out_feature_maps,
                    out_filters_map,
                    mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot,
-                   norm_q_dot_dot,
+                   norm_q_dot_dot_dot,
                    norm_q_mixed, obj,
                    up_night,
                    up_rho,
