@@ -5,7 +5,7 @@ import shutil
 # python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0 --shannon 1
 
 # EXAMPLE 1 (fixed?)
-# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 10000 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00000001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 0
+# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 10000 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00000001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 0
 
 # EXAMPLE 2 (obscillations)
 # python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 1.0 --beta  1.0 --gamma 2.0 --alpha 0.5 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 0.5 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 1
@@ -468,6 +468,7 @@ class FeatureExtractor:
             tf.summary.scalar("Q_MotionFull", motion_full_update)
             tf.summary.scalar("B_IsNight", it_will_be_night)
             tf.summary.scalar("A_FullObjectiveFunction", obj)
+            tf.summary.scalar("R_Q[0][0]", q1[0][0])
 
             # moving-average on objective function terms
             if self._moving_avg_obj > 0.0:

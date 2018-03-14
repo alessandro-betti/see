@@ -71,6 +71,8 @@ def main(filename, file_dir, arguments):
     check_params = True
     softmax = False
 
+    os.remove("output.txt")
+
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
                         "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "beta=",

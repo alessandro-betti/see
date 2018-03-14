@@ -1,7 +1,7 @@
 def out(msg=""):
     print(str(msg))
-    # with open("output.txt", "w") as dump_file:
-    #    dump_file.write(str(msg))
+    with open("output.txt", "a") as dump_file:
+        dump_file.write(str(msg) + "\n")
 
 
 def err(msg):
