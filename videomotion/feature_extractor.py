@@ -4,6 +4,11 @@ import os
 import shutil
 # python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0 --shannon 1
 
+# EXAMPLE 1 (fixed?)
+# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 10000 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00000001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 0
+
+# EXAMPLE 2 (obscillations)
+# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 1.0 --beta  1.0 --gamma 2.0 --alpha 0.5 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 0.5 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 1
 
 class FeatureExtractor:
 
@@ -212,6 +217,8 @@ class FeatureExtractor:
                                           initializer=tf.constant_initializer(0.0, dtype=precision))
 
             # "optimization"-related
+            obj_prev = tf.get_variable("obj_prev", (), dtype=precision,
+                                       initializer=tf.constant_initializer(0.0, dtype=precision))
             obj_values = tf.get_variable("obj_values", [12], dtype=precision,
                                          initializer=tf.constant_initializer(0.0, dtype=precision))
             step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
@@ -543,46 +550,50 @@ class FeatureExtractor:
             with tf.control_dependencies(reset_step_size):
                 if self.step_adapt:
                     increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
+                    #increase1 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce1 = 1.0 - increase1
-                    step_size1 = tf.assign(step_size1,
+                    step_size1_up = tf.assign(step_size1,
                                            tf.minimum(tf.maximum(step_size1 * 0.1 * reduce1 +
                                                                  step_size1 * 2.0 * increase1,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
+                    #increase2 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce2 = 1.0 - increase2
-                    step_size2 = tf.assign(step_size2,
+                    step_size2_up = tf.assign(step_size2,
                                            tf.minimum(tf.maximum(step_size2 * 0.1 * reduce2 +
                                                                  step_size2 * 2.0 * increase2,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
+                    #increase3 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce3 = 1.0 - increase3
-                    step_size3 = tf.assign(step_size3,
+                    step_size3_up = tf.assign(step_size3,
                                            tf.minimum(tf.maximum(step_size3 * 0.1 * reduce3 +
                                                                  step_size3 * 2.0 * increase3,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
+                    #increase4 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce4 = 1.0 - increase4
-                    step_size4 = tf.assign(step_size4,
+                    step_size4_up = tf.assign(step_size4,
                                            tf.minimum(tf.maximum(step_size4 * 0.1 * reduce4 +
                                                                  step_size4 * 2.0 * increase4,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
+                else:
+                    step_size1_up = step_size1
+                    step_size2_up = step_size2
+                    step_size3_up = step_size3
+                    step_size4_up = step_size4
 
             # update rules
-            with tf.control_dependencies(reset_step_size):
+            with tf.control_dependencies([step_size1_up, step_size2_up, step_size3_up, step_size4_up]):
                 if not self.grad:
-                    __updated_q4 = q4 - gradient_like4 * step_size4
+                    with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
+                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up)
+                        up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up)
+                        up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
+                        with tf.control_dependencies([up_q1, up_q2, up_q3]):
+                            up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
                 else:
-                    up_q4 = tf.assign(q1, q1 - gradient_like4 * step_size4)
-
-            if not self.grad:
-                with tf.control_dependencies([__updated_q4]):
-                    up_q1 = tf.assign_sub(q1, tf.multiply(gradient_like1, step_size1))
-                    with tf.control_dependencies([up_q1]):
-                        up_q2 = tf.assign_sub(q2, tf.multiply(gradient_like2, step_size2))
-                        with tf.control_dependencies([up_q2]):
-                            up_q3 = tf.assign_sub(q3, tf.multiply(gradient_like3, step_size3))
-                            with tf.control_dependencies([up_q3]):
-                                up_q4 = tf.assign(q4, __updated_q4)
+                    up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
 
             # updating cyclic dependencies
             with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot]):
@@ -593,6 +604,7 @@ class FeatureExtractor:
                 up_gradient_like2 = tf.assign(gradient_like2_0, gradient_like2)
                 up_gradient_like3 = tf.assign(gradient_like3_0, gradient_like3)
                 up_gradient_like4 = tf.assign(gradient_like4_0, gradient_like4)
+                obj_prev = tf.assign(obj_prev, obj)
                 if self.softmax:
                     up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
                 else:
@@ -607,7 +619,7 @@ class FeatureExtractor:
             # coordinator
             with tf.control_dependencies([up_q4, up_frame_0, up_M_block_0, up_N_block_0,
                                           up_gradient_like1, up_gradient_like2, up_gradient_like3, up_gradient_like4,
-                                          up_feature_map_stats, up_rho, up_night]):
+                                          up_feature_map_stats, up_rho, up_night, obj_prev]):
                 fake_op = tf.eye(1)
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
