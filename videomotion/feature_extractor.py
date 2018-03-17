@@ -529,6 +529,11 @@ class FeatureExtractor:
             # A
             A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
 
+            tf.summary.scalar("Z_Dq1", tf.square(tf.norm(D_q1)))
+            tf.summary.scalar("Z_Cq2", tf.square(tf.norm(C_q2)))
+            tf.summary.scalar("Z_Bq3", tf.square(tf.norm(B_q3)))
+            tf.summary.scalar("Z_Aq4", tf.square(tf.norm(A_q4)))
+
             # F
             if not self.softmax:
                 nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
@@ -540,12 +545,15 @@ class FeatureExtractor:
                 F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
                 F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
                 F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
+                tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
+                
             # update terms
             gradient_like1 = -q2
             gradient_like2 = -q3
             gradient_like3 = -q4
             gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
+
 
             # step sizes
             with tf.control_dependencies(reset_step_size):
@@ -593,6 +601,9 @@ class FeatureExtractor:
                         up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
                         with tf.control_dependencies([up_q1, up_q2, up_q3]):
                             up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
+                            tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
+                            tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
+                            
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
 
