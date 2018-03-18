@@ -638,6 +638,10 @@ class FeatureExtractor:
                                           up_gradient_like1, up_gradient_like2, up_gradient_like3, up_gradient_like4,
                                           up_feature_map_stats, up_rho, up_night, obj_prev]):
                 fake_op = tf.eye(1)
+                #fake_op = [
+                #           tf.Print(up_q4, [up_q4], "up_q4=", summarize=100000000),
+                #           tf.Print(up_q3, [up_q3], "up_q3=", summarize=100000000)
+                #           ]
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
             out_feature_maps = tf.reshape(feature_maps, [self.h, self.w, self.m])  # h x w x m
