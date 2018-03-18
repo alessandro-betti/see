@@ -557,6 +557,11 @@ class FeatureExtractor:
 
             # step sizes
             with tf.control_dependencies(reset_step_size):
+                step_size1 = step_size1_reset
+                step_size2 = step_size2_reset
+                step_size3 = step_size3_reset
+                step_size4 = step_size4_reset
+
                 if self.step_adapt:
                     increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
                     #increase1 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
