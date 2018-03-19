@@ -544,7 +544,7 @@ class FeatureExtractor:
                 Ss = feature_maps * feature_maps * g
                 F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
                 F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
-                F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
+                F = tf.matmul(frame_patches, (self.lambdaE / self.alpha) * F_ge + (self.lambdaC / self.alpha) * F_ce, transpose_a=True)
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
                 
