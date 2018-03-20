@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import shutil
+import tensorflow.contrib.eager as tfe
 # python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0 --shannon 1
 
 # EXAMPLE 1 (fixed?)
@@ -60,7 +61,7 @@ class FeatureExtractor:
         self.summary_writer = None
 
         # attention function
-        self.g_scale = self.wh  # uniform scaling due to the "gx" function
+        self.g_scale = float(self.wh)  # uniform scaling due to the "gx" function
 
         # in case of gradient-like optimization, disable some terms by zeroing their coefficients
         if self.grad:
@@ -364,16 +365,16 @@ class FeatureExtractor:
                 feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)  # wh x m
 
                 # objective function terms: ce, -ge, mi
-                biased_maps = self.gew * feature_maps + (1.0 - self.gew) * feature_map_stats
-                ce = -tf.div(tf.reduce_sum(tf.square(biased_maps)), self.g_scale)
-                minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))), self.g_scale * self.g_scale)
+                biased_maps = float(self.gew) * feature_maps + (1.0 - float(self.gew)) * feature_map_stats
+                ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
+                minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(biased_maps, 0))), self.g_scale * self.g_scale)
 
-                ce = (ce + 1.0) / self.m
-                minus_ge = (self.m * minus_ge - 1.0) / (self.m - 1)
+                ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
+                minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
 
-                mi = - ce - minus_ge
+                mi2 = - ce - minus_ge
 
-                mi = mi + 1.0
+                mi = mi2 + 1.0
 
                 # objective function terms: probabilistic constraints
                 sum_to_one = tf.cast(tf.identity(0.0), precision)
@@ -383,16 +384,16 @@ class FeatureExtractor:
                 feature_maps = tf.add(tf.matmul(frame_patches, q1), 1.0 / self.m)  # wh x m
 
                 # objective function terms: ce, -ge, mi
-                ce = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-                minus_ge = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))),
+                ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
+                minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))),
                                   self.g_scale * self.g_scale)
 
-                ce = (ce + 1.0) / self.m
-                minus_ge = (self.m * minus_ge - 1.0) / (self.m - 1)
+                ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
+                minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
 
-                mi = - ce - minus_ge
+                mi2 = - ce - minus_ge
 
-                mi = mi + 1.0
+                mi = mi2 + 1.0
 
                 # masks for piecewise-linear constraints
                 if not self.prob_range:
@@ -425,7 +426,7 @@ class FeatureExtractor:
                 + tf.reduce_sum(tf.multiply(q1, tf.matmul(O_block, q1)))
 
             # objective function
-            obj = self.lambdaC * 0.5 * ce + self.lambdaE * 0.5 * minus_ge + self.lambda0 * negativeness \
+            obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + self.lambda0 * negativeness \
                 + self.lambda1 * sum_to_one + self.lambdaM * motion \
                 + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot \
                 + self.gamma * norm_q_mixed + self.k * norm_q
@@ -547,73 +548,68 @@ class FeatureExtractor:
                 F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
-                
             # update terms
             gradient_like1 = -q2
             gradient_like2 = -q3
             gradient_like3 = -q4
             gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
 
-
             # step sizes
             with tf.control_dependencies(reset_step_size):
-                step_size1 = step_size1_reset
-                step_size2 = step_size2_reset
-                step_size3 = step_size3_reset
-                step_size4 = step_size4_reset
-
                 if self.step_adapt:
                     increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
                     #increase1 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce1 = 1.0 - increase1
                     step_size1_up = tf.assign(step_size1,
-                                           tf.minimum(tf.maximum(step_size1 * 0.1 * reduce1 +
-                                                                 step_size1 * 2.0 * increase1,
+                                           tf.minimum(tf.maximum(step_size1_reset * 0.1 * reduce1 +
+                                                                 step_size1_reset * 2.0 * increase1,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
                     #increase2 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce2 = 1.0 - increase2
                     step_size2_up = tf.assign(step_size2,
-                                           tf.minimum(tf.maximum(step_size2 * 0.1 * reduce2 +
-                                                                 step_size2 * 2.0 * increase2,
+                                           tf.minimum(tf.maximum(step_size2_reset * 0.1 * reduce2 +
+                                                                 step_size2_reset * 2.0 * increase2,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
                     #increase3 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce3 = 1.0 - increase3
                     step_size3_up = tf.assign(step_size3,
-                                           tf.minimum(tf.maximum(step_size3 * 0.1 * reduce3 +
-                                                                 step_size3 * 2.0 * increase3,
+                                           tf.minimum(tf.maximum(step_size3_reset * 0.1 * reduce3 +
+                                                                 step_size3_reset * 2.0 * increase3,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                     increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
                     #increase4 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
                     reduce4 = 1.0 - increase4
                     step_size4_up = tf.assign(step_size4,
-                                           tf.minimum(tf.maximum(step_size4 * 0.1 * reduce4 +
-                                                                 step_size4 * 2.0 * increase4,
+                                           tf.minimum(tf.maximum(step_size4_reset * 0.1 * reduce4 +
+                                                                 step_size4_reset * 2.0 * increase4,
                                                                  conditioned_step_size), conditioned_step_size * 1000))
                 else:
-                    step_size1_up = step_size1
-                    step_size2_up = step_size2
-                    step_size3_up = step_size3
-                    step_size4_up = step_size4
+                    step_size1_up = step_size1_reset
+                    step_size2_up = step_size2_reset
+                    step_size3_up = step_size3_reset
+                    step_size4_up = step_size4_reset
 
             # update rules
             with tf.control_dependencies([step_size1_up, step_size2_up, step_size3_up, step_size4_up]):
                 if not self.grad:
                     with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
                         up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up)
-                        up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up)
-                        up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
-                        with tf.control_dependencies([up_q1, up_q2, up_q3]):
-                            up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
-                            tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
-                            tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
-                            
+                        with tf.control_dependencies([up_q1]):
+                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up)
+                            with tf.control_dependencies([up_q2]):
+                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
+                                with tf.control_dependencies([up_q3]):
+                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
+                                    tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
+                                    tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
+
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
 
             # updating cyclic dependencies
-            with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot]):
+            with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot, up_q4]):
                 up_frame_0 = tf.assign(frame_0, frame_1)
                 up_M_block_0 = tf.assign(M_block_0, M_block_1)
                 up_N_block_0 = tf.assign(N_block_0, N_block_1)
@@ -639,9 +635,12 @@ class FeatureExtractor:
                                           up_feature_map_stats, up_rho, up_night, obj_prev]):
                 fake_op = tf.eye(1)
                 #fake_op = [
-                #           tf.Print(up_q4, [up_q4], "up_q4=", summarize=100000000),
-                #           tf.Print(up_q3, [up_q3], "up_q3=", summarize=100000000)
-                #           ]
+                            #tf.Print(step_size1_up, [step_size1_up[0][0]], "step_size1_up[0][0]=", summarize=100000000),
+                            #tf.Print(step_size2_up, [step_size2_up[0][0]], "step_size2_up[0][0]=", summarize=100000000),
+                            #tf.Print(step_size3_up, [step_size3_up[0][0]], "step_size3_up[0][0]=", summarize=100000000),
+                            #tf.Print(step_size4_up, [step_size4_up[0][0]], "step_size4_up[0][0]=", summarize=100000000),
+                            #tf.Print(up_q3, [up_q3], "up_q3=", summarize=100000000)
+                           #]
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
             out_feature_maps = tf.reshape(feature_maps, [self.h, self.w, self.m])  # h x w x m
