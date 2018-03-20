@@ -38,6 +38,7 @@ def main(filename, file_dir, arguments):
     filter_size = 3  # "edge" size of a filter, i.e., the area is filter_size x filter_size
     k = 0.5   # weight of the norm of "q"
     alpha = 0.5  # weight of the norm of the second derivative q^(2)
+    alpha_night = 0.5
     beta = 1.0   # weight of the norm of the first derivative q^(1)
     gamma = 2.0   # weight of the mixed-product first-second derivatives q^(2)q^(1)
     theta = 1.0   # exp(theta x t)
@@ -75,7 +76,7 @@ def main(filename, file_dir, arguments):
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
-                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "beta=",
+                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "alpha_night=", "beta=",
                         "k=", "gamma=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
@@ -165,6 +166,8 @@ def main(filename, file_dir, arguments):
                 thetanight = float(arg)
             elif opt == '--alpha':
                 alpha = float(arg)
+            elif opt == '--alpha_night':
+                alpha_night = float(arg)
             elif opt == '--beta':
                 beta = float(arg)
             elif opt == '--eps1':
@@ -324,6 +327,7 @@ def main(filename, file_dir, arguments):
                'theta': theta,
                'thetanight': thetanight,
                'alpha': alpha,
+               'alpha_night': alpha_night,
                'beta': beta,
                'k': k,
                'gamma': gamma,

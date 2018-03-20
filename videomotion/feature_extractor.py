@@ -31,6 +31,7 @@ class FeatureExtractor:
         self.ffn = self.f * self.f * self.n  # unrolled filter volume
         self.init_q = options['init_q']
         self.alpha = options['alpha']
+        self.alpha_night = options['alpha_night']
         self.beta = options['beta']
         self.theta = options['theta']
         self.thetanight = options['thetanight']
@@ -68,6 +69,7 @@ class FeatureExtractor:
             self.theta = 0.0  # here
             self.thetanight = 0.0  # here
             self.alpha = 1.0
+            self.alpha_night = 1.0
             self.beta = 0.0
             self.lambdaM = 0.0
 
@@ -171,8 +173,8 @@ class FeatureExtractor:
             raise ValueError("Invalid lambdaM: " + str(self.lambdaM) + " (it must be >= 0)")
 
         if not skip_some_checks:
-            if self.alpha <= 0.0:
-                raise ValueError("Invalid alpha: " + str(self.alpha) + " (it must be > 0)")
+            if self.alpha_night <= 0.0:
+                raise ValueError("Invalid alpha_night: " + str(self.alpha_night) + " (it must be > 0)")
 
             if self.beta <= 0.0:
                 raise ValueError("Invalid beta: " + str(self.beta) + " (it must be > 0)")
@@ -186,7 +188,7 @@ class FeatureExtractor:
                                  " (it must be > beta/thetanight, where beta/thetanight = " + str(val) + ")")
 
             val = ((self.beta - (self.gamma * self.thetanight)) *
-                   (self.beta - self.thetanight * (self.gamma + 2.0 * self.alpha * self.thetanight))) / (4.0 * self.alpha)
+                   (self.beta - self.thetanight * (self.gamma + 2.0 * self.alpha_night * self.thetanight))) / (4.0 * self.alpha_night)
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
@@ -298,6 +300,8 @@ class FeatureExtractor:
                                      + self.step_size_night * it_will_be_night)
             conditioned_theta = (self.theta * (1.0 - it_will_be_night)
                                  + self.thetanight * it_will_be_night)
+            conditioned_alpha = (self.alpha * (1.0 - it_will_be_night)
+                                 + self.alpha_night * it_will_be_night)
             condition_go_to_night = it_will_be_night * is_day
             condition_go_to_day = (1.0 - it_will_be_night) * is_night
             condition_switch = condition_go_to_night + condition_go_to_day
@@ -428,7 +432,7 @@ class FeatureExtractor:
             # objective function
             obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + self.lambda0 * negativeness \
                 + self.lambda1 * sum_to_one + self.lambdaM * motion \
-                + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot \
+                + conditioned_alpha * norm_q_dot_dot + self.beta * norm_q_dot \
                 + self.gamma * norm_q_mixed + self.k * norm_q
 
             # real mutual information
@@ -498,32 +502,32 @@ class FeatureExtractor:
             N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
 
             # D (this is just a portion of the D matrix in the paper)
-            D = (self.k / self.alpha) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM * conditioned_theta) / self.alpha) * N_block_1_trans \
-                + (self.lambdaM / self.alpha) * tf.subtract(O_block, tf.transpose(N_block_dot)) \
+            D = (self.k / conditioned_alpha) * tf.cast(tf.eye(self.ffn), precision) \
+                - ((self.lambdaM * conditioned_theta) / conditioned_alpha) * N_block_1_trans \
+                + (self.lambdaM / conditioned_alpha) * tf.subtract(O_block, tf.transpose(N_block_dot)) \
 
             if not self.softmax:
-                D = D + (self.lambdaE / self.alpha) * B
-                D_q1 = tf.matmul(D, q1) - (self.lambdaC / self.alpha) * M_block_1_q1
+                D = D + (self.lambdaE / conditioned_alpha) * B
+                D_q1 = tf.matmul(D, q1) - (self.lambdaC / conditioned_alpha) * M_block_1_q1
 
                 if not self.prob_range:
-                    D_q1 = D_q1 + tf.tile((self.lambda1 / self.alpha) *
+                    D_q1 = D_q1 + tf.tile((self.lambda1 / conditioned_alpha) *
                                           tf.expand_dims(tf.reduce_sum(M_block_1_q1, 1), 1), [1, self.m])
             else:
                 D_q1 = tf.matmul(D, q1)
 
             # C
-            C = (((self.gamma / self.alpha) * conditioned_theta * conditioned_theta) \
-                - (self.beta / self.alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM / self.alpha) * conditioned_theta) * M_block_1 \
-                - (self.lambdaM / self.alpha) * (M_block_dot + N_block_1_trans - N_block_1)
+            C = (((self.gamma / conditioned_alpha) * conditioned_theta * conditioned_theta) \
+                - (self.beta / conditioned_alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
+                - ((self.lambdaM / conditioned_alpha) * conditioned_theta) * M_block_1 \
+                - (self.lambdaM / conditioned_alpha) * (M_block_dot + N_block_1_trans - N_block_1)
 
             C_q2 = tf.matmul(C, q2)
 
             # B
-            Bbb = (conditioned_theta * conditioned_theta + (self.gamma / self.alpha) * conditioned_theta
-                   - (self.beta / self.alpha)) \
-                  * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / self.alpha) * M_block_1
+            Bbb = (conditioned_theta * conditioned_theta + (self.gamma / conditioned_alpha) * conditioned_theta
+                   - (self.beta / conditioned_alpha)) \
+                  * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / conditioned_alpha) * M_block_1
 
             B_q3 = tf.matmul(Bbb, q3)
 
@@ -538,14 +542,14 @@ class FeatureExtractor:
             # F
             if not self.softmax:
                 nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
-                F = ((self.lambdaE - self.lambdaC) / (self.m * self.alpha)) * b + nab_ws
+                F = ((self.lambdaE - self.lambdaC) / (self.m * conditioned_alpha)) * b + nab_ws
             else:
                 g = 1.0 / self.g_scale
                 Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
                 Ss = feature_maps * feature_maps * g
                 F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
                 F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
-                F = tf.matmul(frame_patches, (self.lambdaE / self.alpha) * F_ge + (self.lambdaC / self.alpha) * F_ce, transpose_a=True)
+                F = tf.matmul(frame_patches, (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce, transpose_a=True)
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
             # update terms
