@@ -36,11 +36,13 @@ class FeatureExtractor:
         self.alpha = options['alpha']
         self.alpha_night = options['alpha_night']
         self.beta = options['beta']
+        self.beta_night = options['beta_night']
         self.theta = options['theta']
         self.thetanight = options['thetanight']
         self.k = options['k']
         self.softmax = options['softmax']
         self.gamma = options['gamma']
+        self.gamma_night = options['gamma_night']
         self.lambdaE = options['lambdaE']
         self.lambdaC = options['lambdaC']
         self.lambdaM = options['lambdaM']
@@ -74,6 +76,7 @@ class FeatureExtractor:
             self.alpha = 1.0
             self.alpha_night = 1.0
             self.beta = 0.0
+            self.beta_night = 0.0
             self.lambdaM = 0.0
 
         self.__check_params(skip_some_checks=not options['check_params'])
@@ -179,19 +182,19 @@ class FeatureExtractor:
             if self.alpha_night <= 0.0:
                 raise ValueError("Invalid alpha_night: " + str(self.alpha_night) + " (it must be > 0)")
 
-            if self.beta <= 0.0:
-                raise ValueError("Invalid beta: " + str(self.beta) + " (it must be > 0)")
+            if self.beta_night <= 0.0:
+                raise ValueError("Invalid beta: " + str(self.beta_night) + " (it must be > 0)")
 
             if self.k <= 0.0:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be > 0)")
 
-            val = self.beta / self.thetanight
+            val = self.beta_night / self.thetanight
             if self.gamma <= val:
                 raise ValueError("Invalid gamma: " + str(self.gamma) +
                                  " (it must be > beta/thetanight, where beta/thetanight = " + str(val) + ")")
 
-            val = ((self.beta - (self.gamma * self.thetanight)) *
-                   (self.beta - self.thetanight * (self.gamma + 2.0 * self.alpha_night * self.thetanight))) / (4.0 * self.alpha_night)
+            val = ((self.beta_night - (self.gamma * self.thetanight)) *
+                   (self.beta_night - self.thetanight * (self.gamma + 2.0 * self.alpha_night * self.thetanight))) / (4.0 * self.alpha_night)
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
@@ -305,6 +308,10 @@ class FeatureExtractor:
                                  + self.thetanight * it_will_be_night)
             conditioned_alpha = (self.alpha * (1.0 - it_will_be_night)
                                  + self.alpha_night * it_will_be_night)
+            conditioned_beta = (self.beta * (1.0 - it_will_be_night)
+                                 + self.beta_night * it_will_be_night)
+            conditioned_gamma = (self.gamma * (1.0 - it_will_be_night)
+                                 + self.gamma_night * it_will_be_night)
             condition_go_to_night = it_will_be_night * is_day
             condition_go_to_day = (1.0 - it_will_be_night) * is_night
             condition_switch = condition_go_to_night + condition_go_to_day
@@ -435,8 +442,8 @@ class FeatureExtractor:
             # objective function
             obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + self.lambda0 * negativeness \
                 + self.lambda1 * sum_to_one + self.lambdaM * motion \
-                + conditioned_alpha * norm_q_dot_dot + self.beta * norm_q_dot \
-                + self.gamma * norm_q_mixed + self.k * norm_q
+                + conditioned_alpha * norm_q_dot_dot + conditioned_beta * norm_q_dot \
+                + conditioned_gamma * norm_q_mixed + self.k * norm_q
 
             # real mutual information
             min_f = tf.reduce_min(feature_maps, 1)
@@ -520,16 +527,16 @@ class FeatureExtractor:
                 D_q1 = tf.matmul(D, q1)
 
             # C
-            C = (((self.gamma / conditioned_alpha) * conditioned_theta * conditioned_theta) \
-                - (self.beta / conditioned_alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
+            C = (((conditioned_gamma / conditioned_alpha) * conditioned_theta * conditioned_theta) \
+                - (conditioned_beta / conditioned_alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
                 - ((self.lambdaM / conditioned_alpha) * conditioned_theta) * M_block_1 \
                 - (self.lambdaM / conditioned_alpha) * (M_block_dot + N_block_1_trans - N_block_1)
 
             C_q2 = tf.matmul(C, q2)
 
             # B
-            Bbb = (conditioned_theta * conditioned_theta + (self.gamma / conditioned_alpha) * conditioned_theta
-                   - (self.beta / conditioned_alpha)) \
+            Bbb = (conditioned_theta * conditioned_theta + (conditioned_gamma / conditioned_alpha) * conditioned_theta
+                   - (conditioned_beta / conditioned_alpha)) \
                   * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / conditioned_alpha) * M_block_1
 
             B_q3 = tf.matmul(Bbb, q3)

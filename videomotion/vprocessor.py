@@ -40,7 +40,9 @@ def main(filename, file_dir, arguments):
     alpha = 0.5  # weight of the norm of the second derivative q^(2)
     alpha_night = 0.5
     beta = 1.0   # weight of the norm of the first derivative q^(1)
+    beta_night =1.0
     gamma = 2.0   # weight of the mixed-product first-second derivatives q^(2)q^(1)
+    gamma_night=2.0
     theta = 1.0   # exp(theta x t)
     thetanight = 1.0  # dissipation at night
     lambda0 = 10.0  # be positive
@@ -76,8 +78,8 @@ def main(filename, file_dir, arguments):
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
-                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "alpha_night=", "beta=",
-                        "k=", "gamma=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
+                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "alpha_night=", "beta=", "beta_night=",
+                        "k=", "gamma=", "gamma_night=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=", "probA=", "probB=",
@@ -170,6 +172,8 @@ def main(filename, file_dir, arguments):
                 alpha_night = float(arg)
             elif opt == '--beta':
                 beta = float(arg)
+            elif opt == '--beta_night':
+                beta_night = float(arg)
             elif opt == '--eps1':
                 eps1 = float(arg)
             elif opt == '--eps2':
@@ -184,6 +188,8 @@ def main(filename, file_dir, arguments):
                 k = float(arg)
             elif opt == '--gamma':
                 gamma = float(arg)
+            elif opt == '--gamma_night':
+                gamma_night = float(arg)
             elif opt == '--lambdaC':
                 lambdaC = float(arg)
             elif opt == '--lambdaM':
@@ -327,8 +333,10 @@ def main(filename, file_dir, arguments):
                'alpha': alpha,
                'alpha_night': alpha_night,
                'beta': beta,
+               'beta_night': beta_night,
                'k': k,
                'gamma': gamma,
+               'gamma_night': gamma_night,
                'lambda0': lambda0,
                'lambda1': lambda1,
                'lambdaC': lambdaC,
