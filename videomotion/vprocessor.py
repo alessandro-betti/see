@@ -261,10 +261,11 @@ def main(filename, file_dir, arguments):
 
     # checking option-related errors (given the information acquired from the input stream)
     try:
-        if fps != -1 and input_stream.fps < fps:
-            raise ValueError("Video FPS: " + input_stream.fps + ", requested FPS: " + fps)
         if fps <= 0:
-            fps = input_stream.fps
+            if step_size < 0.0:
+                fps = input_stream.fps
+            else:
+                fps = 1.0 / step_size
 
         if frames != -1 and input_stream.frames < frames:
             raise ValueError('Video frames: ' + str(input_stream.frames) + ', requested frames: ' + str(frames))
@@ -280,14 +281,11 @@ def main(filename, file_dir, arguments):
         else:
             c = input_stream.c
 
-        if step_size < 0.0 < fps:
-            step_size = 1.0 / fps
         if step_size < 0.0:
-            step_size = 0.01
-        if step_size_night < 0.0 < fps:
-            step_size_night = 1.0 / fps
+            step_size = 1.0 / fps
+
         if step_size_night < 0.0:
-            step_size_night = 0.01
+            step_size_night = step_size
     except ValueError as e:
         err(e)
         sys.exit(1)

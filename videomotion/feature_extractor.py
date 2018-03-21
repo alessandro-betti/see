@@ -11,6 +11,9 @@ import tensorflow.contrib.eager as tfe
 # EXAMPLE 2 (obscillations)
 # python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 1.0 --beta  1.0 --gamma 2.0 --alpha 0.5 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 0.5 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 1
 
+# python vprocessor.py --run ../data/skater.avi --out exp/skater2 --gray 1 --save_scores_only 1 --res 240x180 --day_only 0 --rho 1.0 --check_params 1 --rep 1000000 --theta 0.0001 --thetanight 10000.0 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 0.01 --zeta 0.0001 --eps1 1000 --eps2 1000 --eps3 1000 --all_black 0 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00005 --step_size_night 0.00001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --frames 1 --init_fixed 0
+
+
 class FeatureExtractor:
 
     def __init__(self, w, h, options, resume=False):
