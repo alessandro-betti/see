@@ -13,6 +13,9 @@ import tensorflow.contrib.eager as tfe
 
 # python vprocessor.py --run ../data/skater.avi --out exp/skater2 --gray 1 --save_scores_only 1 --res 240x180 --day_only 0 --rho 1.0 --check_params 1 --rep 1000000 --theta 0.0001 --thetanight 10000.0 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 0.01 --zeta 0.0001 --eps1 1000 --eps2 1000 --eps3 1000 --all_black 0 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00005 --step_size_night 0.00001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --frames 1 --init_fixed 0
 
+# LATEST
+# python vprocessor.py --run ../data/skater.avi --out exp/skater2 --gray 1 --save_scores_only 1 --res 240x180 --day_only 0 --rho 1.0 --check_params 1 --rep 1000000 --theta 0.0001 --thetanight 100.0 --beta 1.0 --gamma 1.0 --alpha 0.1 --eta 0.01 --zeta 0.00001 --eps1 1000000 --eps2 1000000000 --eps3 10000000000 --all_black 0 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.001 --step_size_night 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --frames 1 --init_fixed 0
+
 
 class FeatureExtractor:
 
@@ -266,10 +269,13 @@ class FeatureExtractor:
                                      initializer=tf.constant_initializer(self.init_q))  # q
 
             q2 = tf.get_variable("q2", [self.ffn, self.m], dtype=precision,
+                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(1)
             q3 = tf.get_variable("q3", [self.ffn, self.m], dtype=precision,
+                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(2)
             q4 = tf.get_variable("q4", [self.ffn, self.m], dtype=precision,
+                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(3)
 
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
