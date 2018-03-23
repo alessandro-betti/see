@@ -1,0 +1,153 @@
+[Parsed Video Options]
+- Action: run
+- Input: /Users/alessandrobetti/VideoMotionEnv/see/videomotion/data/skater.avi
+- Output: /Users/alessandrobetti/VideoMotionEnv/see/videomotion/exp/skater1
+- ForceGray: yes
+- Repetitions: 100
+- Frames: empty
+
+[Input Stream Info]
+- Width: 584
+- Height: 240
+- Channels: 3
+- FPS: 25.0
+- Frames: 228
+
+[Visualization Server]
+- IP: 192.168.1.2
+- Port: 8888
+- Data Root: /Users/alessandrobetti/VideoMotionEnv/see/videomotion/exp/skater1
+- URL: http://192.168.1.2:8888
+
+[Algorithm Options]
+{
+   "root": "/Users/alessandrobetti/VideoMotionEnv/see/videomotion/exp/skater1",
+   "m": 3,
+   "n": 1,
+   "f": 3,
+   "softmax": true,
+   "init_q": 10.0,
+   "theta": 0.0001,
+   "thetanight": 10000.0,
+   "alpha": 1.0,
+   "alpha_night": 0.001,
+   "beta": 1.0,
+   "beta_night": 1.0,
+   "k": 1.0,
+   "gamma": 30001.0,
+   "gamma_night": 1.0,
+   "lambda0": 0.0,
+   "lambda1": 0.0,
+   "lambdaC": 100.0,
+   "lambdaM": 0.0,
+   "lambdaE": 200.0,
+   "eps1": 1.0,
+   "eps2": 1.0,
+   "eps3": 1000.0,
+   "zeta": 0.001,
+   "eta": 0.0,
+   "step_size": 0.0001,
+   "step_size_night": 1e-06,
+   "step_adapt": false,
+   "all_black": 0,
+   "init_fixed": 0,
+   "check_params": true,
+   "rho": 0.0,
+   "day_only": false,
+   "grad": false,
+   "prob_a": -1.0,
+   "prob_b": -1.0,
+   "save_scores_only": false,
+   "gew": 1.0
+}
+
+Operations are now starting...
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=0.0, norm_q''=0.0, norm_q'''=0.0, q'q''=0.0]
+Processed frame 1/22800 [frame_time: 0.146 (0.134), avg_fps: 6.832]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=0.0, norm_q''=0.0, norm_q'''=7.82872e-06, q'q''=0.0]
+Processed frame 2/22800 [frame_time: 0.066 (0.040), avg_fps: 9.402]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=0.0, norm_q''=7.828719e-14, norm_q'''=3.131488e-05, q'q''=0.0]
+Processed frame 3/22800 [frame_time: 0.068 (0.040), avg_fps: 10.695]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=7.8287187e-22, norm_q''=7.045847e-13, norm_q'''=7.0458475e-05, q'q''=2.3486156e-17]
+Processed frame 4/22800 [frame_time: 0.068 (0.046), avg_fps: 11.484]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.252595e-20, norm_q''=2.8183389e-12, norm_q'''=0.00012525951, q'q''=1.8788927e-16]
+Processed frame 5/22800 [frame_time: 0.068 (0.046), avg_fps: 12.007]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=7.828719e-20, norm_q''=7.828719e-12, norm_q'''=0.00019571798, q'q''=7.828719e-16]
+Processed frame 6/22800 [frame_time: 0.066 (0.044), avg_fps: 12.434]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=3.1314876e-19, norm_q''=1.7614618e-11, norm_q'''=0.00028183387, q'q''=2.3486157e-15]
+Processed frame 7/22800 [frame_time: 0.069 (0.040), avg_fps: 12.682]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=9.590181e-19, norm_q''=3.452465e-11, norm_q'''=0.00038360717, q'q''=5.7541083e-15]
+Processed frame 8/22800 [frame_time: 0.079 (0.056), avg_fps: 12.673]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=2.4550863e-18, norm_q''=6.137715e-11, norm_q'''=0.0005010379, q'q''=1.2275431e-14]
+Processed frame 9/22800 [frame_time: 0.073 (0.045), avg_fps: 12.776]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=5.5239436e-18, norm_q''=1.01460174e-10, norm_q'''=0.000634126, q'q''=2.3674046e-14]
+Processed frame 10/22800 [frame_time: 0.075 (0.046), avg_fps: 12.823]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.1273355e-17, norm_q''=1.5853152e-10, norm_q'''=0.0007828715, q'q''=4.2275076e-14]
+Processed frame 11/22800 [frame_time: 0.075 (0.046), avg_fps: 12.871]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=2.1313683e-17, norm_q''=2.3681868e-10, norm_q'''=0.0009472743, q'q''=7.104561e-14]
+Processed frame 12/22800 [frame_time: 0.067 (0.041), avg_fps: 13.011]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=3.7890993e-17, norm_q''=3.410189e-10, norm_q'''=0.0011273347, q'q''=1.13672973e-13]
+Processed frame 13/22800 [frame_time: 0.064 (0.043), avg_fps: 13.171]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=6.403577e-17, norm_q''=4.762991e-10, norm_q'''=0.0013230522, q'q''=1.7464301e-13]
+Processed frame 14/22800 [frame_time: 0.068 (0.045), avg_fps: 13.266]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.0372737e-16, norm_q''=6.482959e-10, norm_q'''=0.001534427, q'q''=2.5931836e-13]
+Processed frame 15/22800 [frame_time: 0.068 (0.047), avg_fps: 13.345]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.6207401e-16, norm_q''=8.631157e-10, norm_q'''=0.0017614595, q'q''=3.740169e-13]
+Processed frame 16/22800 [frame_time: 0.067 (0.044), avg_fps: 13.437]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=2.4550853e-16, norm_q''=1.1273348e-09, norm_q'''=0.002004149, q'q''=5.2608964e-13]
+Processed frame 17/22800 [frame_time: 0.066 (0.045), avg_fps: 13.522]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=3.619998e-16, norm_q''=1.4479987e-09, norm_q'''=0.002262496, q'q''=7.2399953e-13]
+Processed frame 18/22800 [frame_time: 0.066 (0.040), avg_fps: 13.597]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=5.212797e-16, norm_q''=1.8326232e-09, norm_q'''=0.0025364999, q'q''=9.773992e-13]
+Processed frame 19/22800 [frame_time: 0.062 (0.042), avg_fps: 13.710]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=7.350857e-16, norm_q''=2.2891935e-09, norm_q'''=0.0028261612, q'q''=1.29721e-12]
+Processed frame 20/22800 [frame_time: 0.066 (0.044), avg_fps: 13.775]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.0174197e-15, norm_q''=2.8261642e-09, norm_q'''=0.00313148, q'q''=1.6956989e-12]
+Processed frame 21/22800 [frame_time: 0.066 (0.044), avg_fps: 13.831]
+	[status=day, rho=0.0, action_approx=799.5196, mi_real_full=0.0002821684, motion_full=0.0,
+	 mi_real=0.0002821684, mi=0.00026476383, ce=1.0000452, minus_ge=-0.00030994415, sum1=0.0, negativeness=0.0, motion=0.0,
+	 norm_q=782.8721, norm_q'=1.3848209e-15, norm_q''=3.4524605e-09, norm_q'''=0.0034524556, q'q''=2.1865589e-12]
+Processed frame 22/22800 [frame_time: 0.070 (0.046), avg_fps: 13.851]
+Done! (model saved)
