@@ -35,7 +35,7 @@ python vprocessor.py --run data/skater.avi --out exp/skater1\
        --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --check_params 0 --rep 100 --all_black 0 --grad 0 --port 8888 --gew 1.0\
        --m 3 --f 3\
        --init_fixed 0 --init_q 1.0\
-       --alpha 0.000001 --beta  0 --gamma 0.01 --k 0 --theta 10\
+       --alpha 0.000001 --beta 0 --gamma 0.01 --k 0 --theta 10\
        --eta 0.0001 --rho 1\
        --alpha_night 0.001 --beta_night 1.0 --gamma_night 1.0 --thetanight 10000.0\
        --eps1 1 --eps2 1 --eps3 1000 --zeta 0.001\

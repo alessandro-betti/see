@@ -68,6 +68,7 @@ class FeatureExtractor:
         self.root = options['root']
         self.resume = resume
         self.summary_writer = None
+        self.rk = options['rk']
 
         # attention function
         self.g_scale = float(self.wh)  # uniform scaling due to the "gx" function
@@ -281,7 +282,7 @@ class FeatureExtractor:
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
             frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_0, 255.0), 0))
             t_reset_op = tf.assign(t, 0.0)
-            frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
+            frame_1_unblurred = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
             motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
 
             # computing norm of variables
@@ -334,7 +335,7 @@ class FeatureExtractor:
             reset_step_size = [step_size1_reset, step_size2_reset, step_size3_reset, step_size4_reset]
 
             # blurring
-            frame_1 = (1.0 - it_will_be_night) * rho * frame_1
+            frame_1 = (1.0 - it_will_be_night) * rho * frame_1_unblurred
 
             # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
             spatial_gradient = tf.cast(
@@ -568,11 +569,29 @@ class FeatureExtractor:
                 F = tf.matmul(frame_patches, (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce, transpose_a=True)
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
+            h = step_size1_reset
+
             # update terms
-            gradient_like1 = -q2
-            gradient_like2 = -q3
-            gradient_like3 = -q4
-            gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
+            if self.rk:
+                k1a, k1b, k1c, k1d = self.__gradient_likes(
+                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
+
+                k2a, k2b, k2c, k2d = self.__gradient_likes(
+                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - (h/2.0)*k1a, q2 - (h/2.0)*k1b, q3 - (h/2.0)*k1c, q4 - (h/2.0)*k1d)
+
+                k3a, k3b, k3c, k3d = self.__gradient_likes(
+                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - (h/2.0)*k2a, q2 - (h/2.0)*k2b, q3 - (h/2.0)*k2c, q4 - (h/2.0)*k2d)
+
+                k4a, k4b, k4c, k4d = self.__gradient_likes(
+                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - h*k3a, q2 - h*k3b, q3 - h*k3c, q4 - h*k3d)
+
+                gradient_like1 = (k1a + 2.0 * k2a + 2.0 * k3a + k4a) / 6.0
+                gradient_like2 = (k1b + 2.0 * k2b + 2.0 * k3b + k4b) / 6.0
+                gradient_like3 = (k1c + 2.0 * k2c + 2.0 * k3c + k4c) / 6.0
+                gradient_like4 = (k1d + 2.0 * k2d + 2.0 * k3d + k4d) / 6.0
+            else:
+                gradient_like1, gradient_like2, gradient_like3, gradient_like4 = self.__gradient_likes(
+                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
 
             # step sizes
             with tf.control_dependencies(reset_step_size):
@@ -622,8 +641,6 @@ class FeatureExtractor:
                                 up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
                                 with tf.control_dependencies([up_q3]):
                                     up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
-                                    tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
-                                    tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
 
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
@@ -708,3 +725,28 @@ class FeatureExtractor:
                                                    strides=[1, 1, 1, 1],
                                                    rates=[1, 1, 1, 1],
                                                    padding='SAME'), [self.wh, self.ffn])
+
+    def __gradient_likes(self, D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4):
+        D_q1 = tf.matmul(D, q1)
+        C_q2 = tf.matmul(C, q2)
+        B_q3 = tf.matmul(Bbb, q3)
+        A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
+
+        feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)
+        Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
+        Ss = feature_maps * feature_maps * g
+        F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
+        F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
+        F = tf.matmul(frame_patches,
+                      (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce,
+                      transpose_a=True)
+
+        gradient_like1 = tf.identity(-q2)
+        gradient_like2 = tf.identity(-q3)
+        gradient_like3 = tf.identity(-q4)
+        gradient_like4 = tf.identity(D_q1 + C_q2 + B_q3 + A_q4 + F)
+
+        return gradient_like1, gradient_like2, gradient_like3, gradient_like4
+
+
+
