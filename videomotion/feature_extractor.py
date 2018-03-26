@@ -569,10 +569,10 @@ class FeatureExtractor:
                 F = tf.matmul(frame_patches, (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce, transpose_a=True)
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
-            h = step_size1_reset
-
             # update terms
             if self.rk:
+                h = step_size1_reset
+
                 k1a, k1b, k1c, k1d = self.__gradient_likes(
                     D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
 
