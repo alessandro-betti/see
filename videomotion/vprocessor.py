@@ -60,6 +60,7 @@ def main(filename, file_dir, arguments):
     prob_a = -1.0  # eps-insensitive probabilistic constraint
     prob_b = -1.0  # eps-insensitive probabilistic constraint
     gew = 1.0  # weight to the last measurement of the entropy term (historical moving average)
+    rk = 0
 
     step_adapt = False
     step_size = -1
@@ -83,7 +84,7 @@ def main(filename, file_dir, arguments):
                         "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
                         "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=", "probA=", "probB=",
-                        "step_adapt=", "save_scores_only=", "softmax=", "gew="]
+                        "step_adapt=", "save_scores_only=", "softmax=", "gew=", "rk="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
@@ -113,7 +114,8 @@ def main(filename, file_dir, arguments):
                    "use adaptive step_size (binary flag)",
                    "do not save output data, with the exception of the scalar scores (binary flag)",
                    "use the softmax activation (and Shannon's entropy)",
-                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)"]
+                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)",
+                   "use the Runge-Kutta method (binary flag)"]
 
     if arguments is not None and len(arguments) > 0:
         try:
@@ -232,6 +234,8 @@ def main(filename, file_dir, arguments):
                 softmax = int(arg) > 0
             elif opt == '--gew':
                 gew = float(arg)
+            elif opt == '--rk':
+                rk = int(arg) > 0
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
@@ -359,7 +363,8 @@ def main(filename, file_dir, arguments):
                'prob_a': prob_a,
                'prob_b': prob_b,
                'save_scores_only': save_scores_only,
-               'gew': gew}
+               'gew': gew,
+               'rk': rk}
 
     out('[Algorithm Options]')
     out(json.dumps(options, indent=3))

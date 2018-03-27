@@ -21,6 +21,8 @@
 *.private
 data
 exp
+output.txt
+
 *.flake8
 
 ## Do not commit .DS_Store files

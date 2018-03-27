@@ -615,13 +615,13 @@ class FeatureExtractor:
             with tf.control_dependencies([step_size1_up, step_size2_up, step_size3_up, step_size4_up]):
                 if not self.grad:
                     with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
-                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up)
+                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up * (1.0 - it_will_be_night))
                         with tf.control_dependencies([up_q1]):
-                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up)
+                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up * (1.0 - it_will_be_night) + q2 * it_will_be_night)
                             with tf.control_dependencies([up_q2]):
-                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
+                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up * (1.0 - it_will_be_night) + q3 * it_will_be_night)
                                 with tf.control_dependencies([up_q3]):
-                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
+                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up * (1.0 - it_will_be_night) + q4 * it_will_be_night)
                                     tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
                                     tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
 
