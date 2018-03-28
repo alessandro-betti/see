@@ -69,6 +69,7 @@ class FeatureExtractor:
         self.resume = resume
         self.summary_writer = None
         self.rk = options['rk']
+        self.stream = options['stream']
 
         # attention function
         self.g_scale = float(self.wh)  # uniform scaling due to the "gx" function
@@ -593,6 +594,8 @@ class FeatureExtractor:
                 gradient_like1, gradient_like2, gradient_like3, gradient_like4 = self.__gradient_likes(
                     D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
 
+
+
             # step sizes
             with tf.control_dependencies(reset_step_size):
                 if self.step_adapt:
@@ -732,6 +735,7 @@ class FeatureExtractor:
         B_q3 = tf.matmul(Bbb, q3)
         A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
 
+        # frame_patches = self.__extract_patches(tf.expand_dims(tf.div(tf.identity(self.stream.get_at(t=1.0, w=self.w, h=self.h, force_gray=self.n==1)), 255.0), 0))
         feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)
         Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
         Ss = feature_maps * feature_maps * g
