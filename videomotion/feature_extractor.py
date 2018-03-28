@@ -283,7 +283,7 @@ class FeatureExtractor:
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
             frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_0, 255.0), 0))
             t_reset_op = tf.assign(t, 0.0)
-            frame_1_unblurred = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
+            frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
             motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
 
             # computing norm of variables
@@ -336,7 +336,7 @@ class FeatureExtractor:
             reset_step_size = [step_size1_reset, step_size2_reset, step_size3_reset, step_size4_reset]
 
             # blurring
-            frame_1 = (1.0 - it_will_be_night) * rho * frame_1_unblurred
+            frame_1 = (1.0 - it_will_be_night) * rho * frame_1
 
             # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
             spatial_gradient = tf.cast(
@@ -571,28 +571,10 @@ class FeatureExtractor:
                 tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
 
             # update terms
-            if self.rk:
-                h = step_size1_reset
-
-                k1a, k1b, k1c, k1d = self.__gradient_likes(
-                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
-
-                k2a, k2b, k2c, k2d = self.__gradient_likes(
-                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - (h/2.0)*k1a, q2 - (h/2.0)*k1b, q3 - (h/2.0)*k1c, q4 - (h/2.0)*k1d)
-
-                k3a, k3b, k3c, k3d = self.__gradient_likes(
-                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - (h/2.0)*k2a, q2 - (h/2.0)*k2b, q3 - (h/2.0)*k2c, q4 - (h/2.0)*k2d)
-
-                k4a, k4b, k4c, k4d = self.__gradient_likes(
-                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1 - h*k3a, q2 - h*k3b, q3 - h*k3c, q4 - h*k3d)
-
-                gradient_like1 = (k1a + 2.0 * k2a + 2.0 * k3a + k4a) / 6.0
-                gradient_like2 = (k1b + 2.0 * k2b + 2.0 * k3b + k4b) / 6.0
-                gradient_like3 = (k1c + 2.0 * k2c + 2.0 * k3c + k4c) / 6.0
-                gradient_like4 = (k1d + 2.0 * k2d + 2.0 * k3d + k4d) / 6.0
-            else:
-                gradient_like1, gradient_like2, gradient_like3, gradient_like4 = self.__gradient_likes(
-                    D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4)
+            gradient_like1 = -q2
+            gradient_like2 = -q3
+            gradient_like3 = -q4
+            gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
 
 
 
@@ -637,13 +619,15 @@ class FeatureExtractor:
             with tf.control_dependencies([step_size1_up, step_size2_up, step_size3_up, step_size4_up]):
                 if not self.grad:
                     with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
-                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up)
+                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up * (1.0 - it_will_be_night))
                         with tf.control_dependencies([up_q1]):
-                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up)
+                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up * (1.0 - it_will_be_night) + q2 * it_will_be_night)
                             with tf.control_dependencies([up_q2]):
-                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up)
+                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up * (1.0 - it_will_be_night) + q3 * it_will_be_night)
                                 with tf.control_dependencies([up_q3]):
-                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up)
+                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up * (1.0 - it_will_be_night) + q4 * it_will_be_night)
+                                    tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
+                                    tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
 
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
@@ -751,6 +735,7 @@ class FeatureExtractor:
         gradient_like4 = tf.identity(D_q1 + C_q2 + B_q3 + A_q4 + F)
 
         return gradient_like1, gradient_like2, gradient_like3, gradient_like4
+
 
 
 
