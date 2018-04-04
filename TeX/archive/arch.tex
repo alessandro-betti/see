@@ -1,0 +1,57 @@
+\font\ninett=cmtt9
+\font\eighttt=cmtt8 
+\def\uncatcodespecials{\def\do##1{\catcode`##1=12 }\dospecials}
+
+ \newcount\lineno % the number of file lines listed
+        \def\setupverbatim{\eighttt \lineno=0
+        \def\par{\leavevmode\endgraf} \catcode`\`=\active
+          \obeylines \uncatcodespecials \obeyspaces
+          \everypar{\advance\lineno by1 \llap{\sevenrm\the\lineno\ \
+        }}}
+        {\obeyspaces\global\let =\ } % let active space = control space
+
+\def\listing#1{\par\begingroup\setupverbatim\input#1 \endgroup}
+
+\def\scriptdir{../../videomotion/run_scripts}
+
+\def\meno{\medskip\noindent}
+
+\centerline{\bf Experiment archive}
+\smallskip
+\centerline{SaiLab}
+\bigskip
+
+\noindent{\bf Ex 1.\enspace}
+We tried to choose the parameters in such
+a way that the roots of the characteristic polynomial has stable and
+real roots. We found that if we choose
+$$\alpha=1, \quad\beta=6.25\cdot10^{-10},\quad\gamma=1.25\cdot10^{-5},
+\quad k=10^{-20},\quad \theta=10^{-4};$$
+we have the following roots
+$$\lambda_1\approx\lambda_2\approx -10^{-4},\qquad \lambda_3\approx -6\cdot
+10^{-6},\qquad \lambda_4\approx -2\cdot 10^{-7}.$$
+\medskip
+\listing{\scriptdir/exp1.sh}
+\medskip
+Observations....
+
+However we also notice that it develops a solution which makes the norm of
+$q$ very large. We suspect that this is due to the growing dynamic of
+$\rho(t)$.
+
+\meno
+{\bf Ex 2.\enspace} What if we penalize the growth of $\Vert q\Vert^2$
+taking a bigger $k=0.001$ (all the other parameters are the same as before).
+This gives instability, however since we have
+the night-reset we hope to handle this situation.
+$$\lambda_1=\bar \lambda_2\approx -0.1(1+i),\qquad \lambda_3=\bar\lambda_4
+\approx 0.1(1-i).$$
+\medskip
+\listing{\scriptdir/exp2.sh}
+\meno
+This experiment develops similar features with respect to the previous
+set.However there seems to be a little more oscillating but after some time
+it reaches a very stable configuration (the norm of $q$ and a random component
+of $q$ becomes constant).
+
+\bye

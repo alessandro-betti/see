@@ -47,11 +47,21 @@
 python vprocessor.py --run data/skater.avi --out exp/skater1\
        --gray 1 --save_scores_only 0 --res 240x180 --day_only 0 --check_params 1 --rep 100 --all_black 0 --grad 0 --port 8888 --gew 1.0\
        --m 3 --f 3\
-       --init_fixed 1 --init_q 1.0\
-       --alpha 0.001 --beta  1 --gamma 1 --k 1 --theta 0.0001\
+       --init_fixed 0 --init_q 1.0\
+       --alpha 2640000 --beta  84 --gamma 840066 --k 0.0000000000008 --theta 0.0001\
        --eta 0.1 --rho 0\
        --alpha_night 0.001 --beta_night 1.0 --gamma_night 1.0 --thetanight 10000.0\
        --eps1 1 --eps2 1 --eps3 1000 --zeta 0.001\
-       --step_size 0.001 --step_size_night 0.0000001 --step_adapt 0\
+       --step_size 0.00001 --step_size_night 0.0000001 --step_adapt 0\
        --lambda1 0.0 --lambda0 0.0 --softmax 1\
        --lambdaM 0.0 --lambdaE 200.0 --lambdaC 100.0
+
+# With this settings (and with hard reset at night) it develops a configuration which has high conditional entropy
+# but small minus the entropy.
+
+### insert the parameters here
+
+# With this settings (and with hard reset at night) it develops a better configuration with smaller conditional entropy
+# and small minus the entropy, but with lots of oscillations.
+
+### insert the parameters here

@@ -1,0 +1,36 @@
+\def\meno{\medskip\noindent}
+
+\centerline{\bf Algebraic analysis of our characteristic equation}
+\meno
+The choice of the regularization parameters of our theory determines the
+nature of the roots of the roots of the characteristic polynomial of our forth
+order equation in the absence of the input.
+
+Consider a quartic equation
+$$P(x):=  x^4+b x^3 +c x^2+d x+e=0, \eqno(1)$$
+performing the substitution $x=z-b/4$ we obtain the reduced quartic equation
+$$Q(z):=P(z-b/4)=z^4+q z^2+r z+s=0,\eqno(2)$$
+where
+$$q=c-{3 b^2\over 8}, \quad r={b^3\over 8}-{bc\over 2}+d,\quad s=
+{b^2c\over 16}-{3\over 256} b^4-{bd\over 4}+e. \eqno(3)$$
+
+\proclaim
+Theorem A {\rm ({\it Lagrange\/})}. A quartic equation~(2) with
+q,r,s, real, $r\ne 0$, and with discriminant $\Delta$, has
+\medskip
+\item{1. } 4 distinct real roots if $q<0$, $4s-q^2<0$ and $\Delta>0$;
+\item{2. } no real root if $q\ge0$ and $4s-q^2\ge 0$ and $\Delta>0$;
+\item{3. } 2 distinct real and 2 distinct imaginary roots if $\Delta<0$;
+\item{4. } at least 2 equal real roots if $\Delta=0$.
+
+Since we are interested in reality we should analyze also point 4. in
+some details. The following result completes the characterization of
+real roots:
+
+\proclaim
+Theorem B.  A quartic equation~(2) with
+q,r,s, real, $r\ne 0$, and with discriminant $\Delta\equiv 0$, has
+\medskip
+\item{1. } 4 distinct real roots if $q<0$, $4s-q^2<0$ and $\Delta>0$;
+
+\bye
