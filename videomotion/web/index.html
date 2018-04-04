@@ -26,7 +26,7 @@
         var _canvas_to_draw_count = 0;
         var _w = 0;
         var _h = 0;
-        var _rho = 1.0;
+        var _night = 1.0;
 
         // add a new canvas to the main table or return an already created one
         function get_canvas(caption, w, h) {
@@ -65,6 +65,7 @@
             _col = 0;
             _canvas_to_draw_count = 0;
             document.getElementById('main_table').innerHTML = "<tbody></tbody>";
+            document.getElementById("json").innerHTML = "";
         }
 
         function get_params() {
@@ -192,7 +193,7 @@
             });
         };
 
-        function get_rho(frame) {
+        function get_others(frame) {
             console.log("Requested: others")
             $.ajax({
                 type: "GET",
@@ -202,7 +203,11 @@
                 },
                 success: function (byte_str) {
                     var others = JSON.parse(byte_str);
-                    _rho = others['rho'] * (1.0 - others['is_night'])
+                    if (others['status'] == 'day')
+                        _night = 0.0
+                    else
+                        _night = 1.0
+                    document.getElementById("json").innerHTML = JSON.stringify(others, undefined, 2);
                 },
                 error: function (result) {
                     if (!_error) {
@@ -216,7 +221,7 @@
 
         function get_and_draw_frame(frame) {
             console.log("Requested: frame");
-            get_rho(frame);
+            get_others(frame);
             _canvas_to_draw_count++;
             var ctx = get_canvas("Video", _w, _h); // ensure this is immediately returned (to gain a top row position)
             $.ajax({
@@ -233,7 +238,7 @@
                     img.onload = function() {
                         ctx.drawImage(img, 0, 0, img.width, img.height);
                         var imgData = ctx.getImageData(0, 0, img.width, img.height);
-                        scalePix(imgData.data, _rho);
+                        scalePix(imgData.data, 1.0 - _night);
                         ctx.putImageData(imgData, 0, 0);
                         _canvas_to_draw_count--;
                     }
@@ -806,9 +811,11 @@
     <input type="checkbox" id="checkbox_features_normalization" onclick="{ _visu_changed = true; }">Min-Max Features/Filters
     <input type="checkbox" id="checkbox_motion_map" checked onclick="{ _visu_changed = true; }">Motion Map
 </form>
-<table class="tableStyle" id="main_table">
+<table>
+<tr><td><table class="tableStyle" id="main_table">
 <tbody>
 </tbody>
+</table></td><td><pre id="json"></pre></td></tr>
 </table>
 </body>
 </html>

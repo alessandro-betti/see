@@ -38,84 +38,68 @@ def main(filename, file_dir, arguments):
     filter_size = 3  # "edge" size of a filter, i.e., the area is filter_size x filter_size
     k = 0.5   # weight of the norm of "q"
     alpha = 0.5  # weight of the norm of the second derivative q^(2)
-    alpha_night = 0.5
     beta = 1.0   # weight of the norm of the first derivative q^(1)
-    beta_night =1.0
     gamma = 2.0   # weight of the mixed-product first-second derivatives q^(2)q^(1)
-    gamma_night=2.0
     theta = 1.0   # exp(theta x t)
-    thetanight = 1.0  # dissipation at night
-    lambda0 = 10.0  # be positive
-    lambda1 = 10.0  # sum to 1
     lambdaM = 1.0  # motion constraint
     lambdaC = 2.0  # conditional entropy
     lambdaE = 1.0  # entropy
     eps1 = 100000.0  # bound on the norm of the first derivative q^(1)
     eps2 = 100000.0  # bound on the norm of the second derivative q^(2)
     eps3 = 100000.0  # bound on the norm of the third derivative q^(3)
-    zeta = 0.8
     eta = 0.25
     rho = 0.0
     init_q = 0.1
-    prob_a = -1.0  # eps-insensitive probabilistic constraint
-    prob_b = -1.0  # eps-insensitive probabilistic constraint
     gew = 1.0  # weight to the last measurement of the entropy term (historical moving average)
     rk = 0
-
-    step_adapt = False
     step_size = -1
-    step_size_night = -1
 
     resume = 0
-    all_black = 0
-    init_fixed = 0
-    grad = False
+    all_black = False
+    init_fixed = False
     day_only = False
     save_scores_only = False
     check_params = True
-    softmax = False
+    grad = False
+    step_adapt = False
+    blur = False
 
     os.remove("output.txt")
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
-                        "gray=", "f=", "m=", "init_q=", "theta=", "thetanight=", "alpha=", "alpha_night=", "beta=", "beta_night=",
-                        "k=", "gamma=", "gamma_night=", "lambda0=", "lambda1=", "lambdaC=", "lambdaE=", "lambdaM=",
-                        "rep=", "eps1=", "eps2=", "eps3=", "zeta=", "eta=",
-                        "step_size=", "step_size_night=", "all_black=", "init_fixed=", "check_params=",
-                        "grad=", "rho=", "day_only=", "probA=", "probB=",
-                        "step_adapt=", "save_scores_only=", "softmax=", "gew=", "rk="]
+                        "gray=", "f=", "m=", "init_q=", "theta=", "alpha=", "beta=",
+                        "k=", "gamma=", "lambdaC=", "lambdaE=", "lambdaM=",
+                        "rep=", "eps1=", "eps2=", "eps3=", "eta=",
+                        "step_size=", "all_black=", "init_fixed=", "check_params=",
+                        "grad=", "rho=", "day_only=",
+                        "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
                    "edge of a filter (example for a 3x3 filter: 3)", "number of features",
                    "maximum absolute value of initial components of q",
-                   "exp(theta x t)", "exp(thetanight x t)", "weight of the norm of the second derivative of q",
+                   "exp(theta x t)", "weight of the norm of the second derivative of q",
                    "weight of the norm of the first derivative of q", "weight of the norm of q",
-                   "weight of the mixed-product first-second derivatives", "weight of the positivity constraint",
-                   "weight of the sum-to-1 constraint", "weight of the conditional entropy",
+                   "weight of the mixed-product first-second derivatives", "weight of the conditional entropy",
                    "weight of the entropy", "weight of the motion constraint",
                    "number of video repetitions",
-                   "bound on the norm of the first derivative of q",
-                   "bound on the norm of the second derivative of q",
-                   "bound on the norm of the third derivative of q",
-                   "norm-bounds scaling factor during night",
+                   "bound on the norm of the first derivative of q (squared norm)",
+                   "bound on the norm of the second derivative of q (squared norm)",
+                   "bound on the norm of the third derivative of q (squared norm)",
                    "update factor for parameter rho",
                    "size of the step in the Euler's method (or learning rate in the gradient-based update)",
-                   "size of the step in the Euler's method (or learning rate in the gradient-based update) at night",
                    "force input to be all black",
                    "initialize all the components of q to init_q",
                    "check validity of the alpha, beta, gamma, theta, and k parameters (binary flag)",
                    "switch to online stochastic gradient (binary flag)",
                    "blurring factor",
                    "force the system to work only in day-mode",
-                   "lower bound of the bound-based probabilistic constraint",
-                   "upper bound of the bound-based probabilistic constraint",
-                   "use adaptive step_size (binary flag)",
                    "do not save output data, with the exception of the scalar scores (binary flag)",
-                   "use the softmax activation (and Shannon's entropy)",
-                   "weight to give to the entropy term in the moving-average-based estimate (only when softmax is 1)",
-                   "use the Runge-Kutta method (binary flag)"]
+                   "weight to give to the entropy term in the moving-average-based estimate",
+                   "use the Runge-Kutta method (binary flag) - not implemented yet",
+                   "use adaptive step size (gradient-based optimization only)",
+                   "use Gaussian blurring (binary flag)"]
 
     if arguments is not None and len(arguments) > 0:
         try:
@@ -166,58 +150,38 @@ def main(filename, file_dir, arguments):
                 init_q = float(arg)
             elif opt == '--theta':
                 theta = float(arg)
-            elif opt == '--thetanight':
-                thetanight = float(arg)
             elif opt == '--alpha':
                 alpha = float(arg)
-            elif opt == '--alpha_night':
-                alpha_night = float(arg)
             elif opt == '--beta':
                 beta = float(arg)
-            elif opt == '--beta_night':
-                beta_night = float(arg)
             elif opt == '--eps1':
                 eps1 = float(arg)
             elif opt == '--eps2':
                 eps2 = float(arg)
             elif opt == '--eps3':
                 eps3 = float(arg)
-            elif opt == '--zeta':
-                zeta = float(arg)
             elif opt == '--eta':
                 eta = float(arg)
             elif opt == '--k':
                 k = float(arg)
             elif opt == '--gamma':
                 gamma = float(arg)
-            elif opt == '--gamma_night':
-                gamma_night = float(arg)
             elif opt == '--lambdaC':
                 lambdaC = float(arg)
             elif opt == '--lambdaM':
                 lambdaM = float(arg)
-            elif opt == '--lambda1':
-                lambda1 = float(arg)
-            elif opt == '--lambda0':
-                lambda0 = float(arg)
             elif opt == '--lambdaE':
                 lambdaE = float(arg)
             elif opt == '--step_size':
                 step_size = float(arg)
-            elif opt == '--step_size_night':
-                step_size_night = float(arg)
-            elif opt == '--probA':
-                prob_a = float(arg)
-            elif opt == '--probB':
-                prob_b = float(arg)
             elif opt == '--resume':
                 resume = int(arg)
             elif opt == '--port':
                 visualization_port = int(arg)
             elif opt == '--all_black':
-                all_black = int(arg)
+                all_black = int(arg) > 0
             elif opt == '--init_fixed':
-                init_fixed = int(arg)
+                init_fixed = int(arg) > 0
             elif opt == '--check_params':
                 check_params = int(arg) > 0
             elif opt == '--rho':
@@ -226,16 +190,16 @@ def main(filename, file_dir, arguments):
                 grad = int(arg) > 0
             elif opt == '--day_only':
                 day_only = int(arg) > 0
-            elif opt == '--step_adapt':
-                step_adapt = int(arg) > 0
             elif opt == '--save_scores_only':
                 save_scores_only = int(arg) > 0
-            elif opt == '--softmax':
-                softmax = int(arg) > 0
             elif opt == '--gew':
                 gew = float(arg)
             elif opt == '--rk':
                 rk = int(arg) > 0
+            elif opt == '--step_adapt':
+                step_adapt = int(arg) > 0
+            elif opt == '--blur':
+                blur = int(arg) > 0
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
@@ -245,16 +209,9 @@ def main(filename, file_dir, arguments):
         sys.exit(2)
 
     # fixing/forcing options
-    if prob_b < prob_a:
-        err("Invalid probabilistic range: [" + str(prob_a) + "," + str(prob_b) + "]")
     if repetitions <= 0:
         repetitions = 1
     input_is_video = input_file is not None and len(input_file) > 0
-    if not input_file and (w != -1 or h != -1 or fps != -1 or frames != -1):
-        warn("Resolution, frame rate, and number of frames are ignored when providing already processed input data.")
-        w = -1
-        h = -1
-        fps = -1
 
     # printing parsed options
     out('[Parsed Video Options]')
@@ -267,7 +224,7 @@ def main(filename, file_dir, arguments):
     out()
 
     # opening the input stream
-    input_stream = InputStream(input_file or input_folder, input_is_video)
+    input_stream = InputStream(input_file or input_folder, input_is_video, blur)
 
     # checking option-related errors (given the information acquired from the input stream)
     try:
@@ -293,9 +250,6 @@ def main(filename, file_dir, arguments):
 
         if step_size < 0.0:
             step_size = 1.0 / fps
-
-        if step_size_night < 0.0:
-            step_size_night = step_size
     except ValueError as e:
         err(e)
         sys.exit(1)
@@ -306,12 +260,12 @@ def main(filename, file_dir, arguments):
     out('- Width: ' + str(input_stream.w))
     out('- Height: ' + str(input_stream.h))
     out('- Channels: ' + str(input_stream.c))
-    out('- FPS: ' + ("empty" if input_stream.fps <= 0 else str(input_stream.fps)))
+    out('- FPS: ' + ("empty" if float(input_stream.fps) <= 0.0 else str(input_stream.fps)))
     out('- Frames: ' + ("empty" if input_stream.frames < 0 else str(input_stream.frames)))
     out()
 
     # setting up the output stream (folder)
-    output_stream = OutputStream(output_folder, resume == 0 and (input_is_video or input_folder != output_folder))
+    output_stream = OutputStream(output_folder, resume == 0)
 
     # opening a visualization service (random port)
     visualization_server = None
@@ -330,41 +284,31 @@ def main(filename, file_dir, arguments):
                'm': features,
                'n': c,
                'f': filter_size,
-               'softmax': softmax,
                'init_q': init_q,
                'theta': theta,
-               'thetanight': thetanight,
                'alpha': alpha,
-               'alpha_night': alpha_night,
                'beta': beta,
-               'beta_night': beta_night,
                'k': k,
                'gamma': gamma,
-               'gamma_night': gamma_night,
-               'lambda0': lambda0,
-               'lambda1': lambda1,
                'lambdaC': lambdaC,
                'lambdaM': lambdaM,
                'lambdaE': lambdaE,
                'eps1': eps1,
                'eps2': eps2,
                'eps3': eps3,
-               'zeta': zeta,
                'eta': eta,
                'step_size': step_size,
-               'step_size_night': step_size_night,
-               'step_adapt': step_adapt,
                'all_black': all_black,
                'init_fixed': init_fixed,
                'check_params': check_params,
                'rho': rho,
                'day_only': day_only,
-               'grad': grad,
-               'prob_a': prob_a,
-               'prob_b': prob_b,
                'save_scores_only': save_scores_only,
                'gew': gew,
-               'rk': rk}
+               'rk': rk,
+               'grad': grad,
+               'step_adapt': step_adapt,
+               'blur': blur}
 
     out('[Algorithm Options]')
     out(json.dumps(options, indent=3))

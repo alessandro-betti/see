@@ -2,19 +2,6 @@ import tensorflow as tf
 import numpy as np
 import os
 import shutil
-import tensorflow.contrib.eager as tfe
-# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 0 --rep 100 --theta 0.0 --beta 1.0 --gamma 1.0 --alpha 1.0 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 0 --grad 1 --m 3 --f 3 --init_q 1.0 --k 0.000001 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.1 --step_adapt 1 --softmax 1 --port 8888 --gew 1.0 --shannon 1
-
-# EXAMPLE 1 (fixed?)
-# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 10000 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00000001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 0
-
-# EXAMPLE 2 (obscillations)
-# python vprocessor.py --run ../data/skater.avi --out exp/skater1 --gray 1 --save_scores_only 0 --res 240x180 --day_only 1 --rho 1.0 --check_params 1 --rep 100 --theta 1.0 --beta  1.0 --gamma 2.0 --alpha 0.5 --eta 1.0 --eps1 10000 --eps2 10000 --eps3 10000 --all_black 1 --grad 0 --m 3 --f 3 --init_q 1.0 --k 0.5 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --init_fixed 1
-
-# python vprocessor.py --run ../data/skater.avi --out exp/skater2 --gray 1 --save_scores_only 1 --res 240x180 --day_only 0 --rho 1.0 --check_params 1 --rep 1000000 --theta 0.0001 --thetanight 10000.0 --beta 1.0 --gamma 1.0 --alpha 0.001 --eta 0.01 --zeta 0.0001 --eps1 1000 --eps2 1000 --eps3 1000 --all_black 0 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.00005 --step_size_night 0.00001 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --frames 1 --init_fixed 0
-
-# LATEST
-# python vprocessor.py --run ../data/skater.avi --out exp/skater2 --gray 1 --save_scores_only 1 --res 240x180 --day_only 0 --rho 1.0 --check_params 1 --rep 1000000 --theta 0.0001 --thetanight 100.0 --beta 1.0 --gamma 1.0 --alpha 0.1 --eta 0.01 --zeta 0.00001 --eps1 1000000 --eps2 1000000000 --eps3 10000000000 --all_black 0 --grad 0 --m 3 --f 3 --init_q 1.0 --k 1 --lambda1 0.0 --lambda0 0.0 --lambdaM 0.0 --lambdaE 2.0 --lambdaC 1.0 --step_size 0.001 --step_size_night 0.01 --step_adapt 0 --softmax 1 --port 8888 --gew 1.0 --frames 1 --init_fixed 0
 
 
 class FeatureExtractor:
@@ -22,66 +9,53 @@ class FeatureExtractor:
     def __init__(self, w, h, options, resume=False):
         self.__first_frame = True
         self.step = 1
-        self._moving_avg_obj = -1.0
 
         # saving options (and other useful values) to direct attributes
-        self.w = w
-        self.h = h
-        self.wh = w * h  # number of pixels (per input channel)
         self.step_size = options['step_size']
-        self.step_size_night = options['step_size_night']
         self.step_adapt = options['step_adapt']
         self.f = options['f']  # full edge of the filter (i.e., 3 in case of 3x3 filters)
         self.n = options['n']  # input channels/features
         self.m = options['m']  # output features
-        self.ffn = self.f * self.f * self.n  # unrolled filter volume
         self.init_q = options['init_q']
         self.alpha = options['alpha']
-        self.alpha_night = options['alpha_night']
         self.beta = options['beta']
-        self.beta_night = options['beta_night']
         self.theta = options['theta']
-        self.thetanight = options['thetanight']
         self.k = options['k']
-        self.softmax = options['softmax']
         self.gamma = options['gamma']
-        self.gamma_night = options['gamma_night']
         self.lambdaE = options['lambdaE']
         self.lambdaC = options['lambdaC']
         self.lambdaM = options['lambdaM']
-        self.lambda0 = options['lambda0']
-        self.lambda1 = options['lambda1']
-        self.eps1 = options['eps1']
-        self.eps2 = options['eps2']
-        self.eps3 = options['eps3']
-        self.zeta = options['zeta']
+        self.eps1 = options['eps1'] * self.m
+        self.eps2 = options['eps2'] * self.m
+        self.eps3 = options['eps3'] * self.m
         self.gew = options['gew']
         self.eta = options['eta']
         self.all_black = options['all_black']
-        self.init_fixed = options['init_fixed'] > 0
+        self.init_fixed = options['init_fixed']
         self.rho = options['rho']
         self.day_only = options['day_only']
         self.grad = options['grad']
-        self.prob_a = options['prob_a']
-        self.prob_b = options['prob_b']
-        self.prob_range = self.prob_a > 0.0 and self.prob_b > 0.0
         self.root = options['root']
-        self.resume = resume
-        self.summary_writer = None
         self.rk = options['rk']
         self.stream = options['stream']
+
+        # saving other parameters
+        self.resume = resume
+        self.summary_writer = None
+        self.w = w
+        self.h = h
+        self.wh = w * h  # number of pixels (per input channel)
+        self.ffn = self.f * self.f * self.n  # unrolled filter volume
 
         # attention function
         self.g_scale = float(self.wh)  # uniform scaling due to the "gx" function
 
         # in case of gradient-like optimization, disable some terms by zeroing their coefficients
         if self.grad:
-            self.theta = 0.0  # here
-            self.thetanight = 0.0  # here
-            self.alpha = 1.0
-            self.alpha_night = 1.0
+            self.theta = 0.0  # this should >> 1
+            self.alpha = 1.0  # this should be 0, but I need this value (1.0) due to implementation issues
             self.beta = 0.0
-            self.beta_night = 0.0
+            self.gamma = 0.0  # this should be 1/(\theta^2)
             self.lambdaM = 0.0
 
         self.__check_params(skip_some_checks=not options['check_params'])
@@ -111,11 +85,10 @@ class FeatureExtractor:
         self.summary_writer = tf.summary.FileWriter(self.root + '/tensor_board', self.sess.graph)
 
     # processing the current frame (frame_1 below)
-    def run_step(self, frame_0_to_feed, frame_1_to_feed, motion_01_to_feed):
+    def run_step(self, frame_1_to_feed, motion_01_to_feed):
 
         # zero signal
         if self.all_black > 0:
-            frame_0_to_feed.fill(0.0)
             frame_1_to_feed.fill(0.0)
             motion_01_to_feed.fill(0.0)
 
@@ -126,12 +99,10 @@ class FeatureExtractor:
             one_over_delta = float(self.step_size)
 
         # getting values that are fed to the session "runner"
-        fed_frame_0 = tf.get_default_graph().get_tensor_by_name("fed_frame_0:0")
         fed_frame_1 = tf.get_default_graph().get_tensor_by_name("fed_frame_1:0")
         fed_motion_01 = tf.get_default_graph().get_tensor_by_name("fed_motion_01:0")
         fed_one_over_delta = tf.get_default_graph().get_tensor_by_name("fed_one_over_delta:0")
-        feed_dict = {fed_frame_0: frame_0_to_feed,
-                     fed_frame_1: frame_1_to_feed,
+        feed_dict = {fed_frame_1: frame_1_to_feed,
                      fed_motion_01: motion_01_to_feed,
                      fed_one_over_delta: one_over_delta}
 
@@ -143,22 +114,16 @@ class FeatureExtractor:
             self.__first_frame = False
 
         # running the computations over the TensorFlow graph
-        feature_maps, filters_matrix, \
-            mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
-            norm_q_dot_dot_dot, \
-            norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full, \
-            summary_ops, fake_op = self.sess.run(self.process_frame_ops, feed_dict=feed_dict)
+        ret = self.sess.run(self.process_frame_ops, feed_dict=feed_dict)
 
         # TensorBoard-related
-        self.summary_writer.add_summary(summary_ops, self.step)
+        self.summary_writer.add_summary(ret[-2], self.step)
 
         # next step
         self.step = self.step + 1
 
         # returning data (no output printing in this class, please!)
-        return feature_maps, filters_matrix, \
-            mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot, \
-               norm_q_dot_dot_dot, norm_q_mixed, all_terms, is_night, rho, mi_real_full, motion_full
+        return ret[0:-2]
 
     def __check_params(self, skip_some_checks=False):
         if self.f < 3 or self.f % 2 == 0:
@@ -168,14 +133,8 @@ class FeatureExtractor:
         if self.m < 2:
             raise ValueError("Invalid number of output features: " + str(self.m) + " (it must be >= 2)")
 
-        if self.lambda0 < 0.0:
-            raise ValueError("Invalid lambda0: " + str(self.lambda0) + " (it must be >= 0)")
-
         if self.lambdaE < 0.0:
             raise ValueError("Invalid lambdaE: " + str(self.lambdaE) + " (it must be >= 0)")
-
-        if self.lambda1 < 0.0:
-            raise ValueError("Invalid lambda1: " + str(self.lambda1) + " (it must be >= 0)")
 
         if self.lambdaC < 0.0:
             raise ValueError("Invalid lambdaC: " + str(self.lambdaC) + " (it must be >= 0)")
@@ -183,23 +142,32 @@ class FeatureExtractor:
         if self.lambdaM < 0.0:
             raise ValueError("Invalid lambdaM: " + str(self.lambdaM) + " (it must be >= 0)")
 
-        if not skip_some_checks:
-            if self.alpha_night <= 0.0:
-                raise ValueError("Invalid alpha_night: " + str(self.alpha_night) + " (it must be > 0)")
+        if self.eps1 < 0.0:
+            raise ValueError("Invalid eps1: " + str(self.eps1) + " (it must be >= 0)")
 
-            if self.beta_night <= 0.0:
-                raise ValueError("Invalid beta: " + str(self.beta_night) + " (it must be > 0)")
+        if self.eps2 < 0.0:
+            raise ValueError("Invalid eps2: " + str(self.eps2) + " (it must be >= 0)")
+
+        if self.eps3 < 0.0:
+            raise ValueError("Invalid eps3: " + str(self.eps3) + " (it must be >= 0)")
+
+        if not skip_some_checks:
+            if self.alpha <= 0.0:
+                raise ValueError("Invalid alpha_night: " + str(self.alpha) + " (it must be > 0)")
+
+            if self.beta <= 0.0:
+                raise ValueError("Invalid beta: " + str(self.beta) + " (it must be > 0)")
 
             if self.k <= 0.0:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be > 0)")
 
-            val = self.beta_night / self.thetanight
+            val = self.beta / self.theta
             if self.gamma <= val:
                 raise ValueError("Invalid gamma: " + str(self.gamma) +
-                                 " (it must be > beta/thetanight, where beta/thetanight = " + str(val) + ")")
+                                 " (it must be > beta/theta, where beta/theta = " + str(val) + ")")
 
-            val = ((self.beta_night - (self.gamma * self.thetanight)) *
-                   (self.beta_night - self.thetanight * (self.gamma + 2.0 * self.alpha_night * self.thetanight))) / (4.0 * self.alpha_night)
+            val = ((self.beta - (self.gamma * self.theta)) *
+                   (self.beta - self.theta * (self.gamma + 2.0 * self.alpha * self.theta))) / (4.0 * self.alpha)
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
@@ -209,15 +177,12 @@ class FeatureExtractor:
         precision = tf.float32
 
         # TensorFlow inputs
-        fed_frame_0 = tf.placeholder(precision, name="fed_frame_0")
         fed_frame_1 = tf.placeholder(precision, name="fed_frame_1")
         fed_motion_01 = tf.placeholder(precision, name="fed_motion_01")
         fed_one_over_delta = tf.placeholder(precision, shape=(), name="fed_one_over_delta")
 
         # TensorFlow variables (main scope)
         with tf.variable_scope("main", reuse=False):
-
-            # "blurring"-related
             rho = tf.get_variable("rho", (), dtype=precision,
                                   initializer=tf.constant_initializer(self.rho, dtype=precision))
             is_night = tf.get_variable("night", (), dtype=precision,
@@ -229,20 +194,12 @@ class FeatureExtractor:
                                                initializer=tf.constant_initializer(0.0, dtype=precision))
             motion_full = tf.get_variable("motion_full", (), dtype=precision,
                                           initializer=tf.constant_initializer(0.0, dtype=precision))
-
-            # "optimization"-related
-            obj_prev = tf.get_variable("obj_prev", (), dtype=precision,
-                                       initializer=tf.constant_initializer(0.0, dtype=precision))
-            obj_values = tf.get_variable("obj_values", [12], dtype=precision,
-                                         initializer=tf.constant_initializer(0.0, dtype=precision))
-            step_size1 = tf.get_variable("step_size1", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size2 = tf.get_variable("step_size2", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size3 = tf.get_variable("step_size3", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
-            step_size4 = tf.get_variable("step_size4", [self.ffn, self.m], dtype=precision,
-                                         initializer=tf.constant_initializer(self.step_size, dtype=precision))
+            obj_comp_values = tf.get_variable("obj_comp_values", [12], dtype=precision,
+                                              initializer=tf.constant_initializer(0.0, dtype=precision))
+            step_size = tf.get_variable("step_size", [self.ffn, self.m], dtype=precision,
+                                        initializer=tf.constant_initializer(self.step_size, dtype=precision))
+            feature_map_stats = tf.get_variable("feature_map_stats", [self.wh, self.m], dtype=precision,
+                                                initializer=tf.constant_initializer(1.0 / self.m, dtype=precision))
 
             # variables that store what has been computed in the previous frame
             frame_0 = tf.get_variable("frame_0", [1, self.h, self.w, self.n], dtype=precision,
@@ -251,16 +208,9 @@ class FeatureExtractor:
                                         initializer=tf.zeros_initializer)
             N_block_0 = tf.get_variable("N_block_0", [self.ffn, self.ffn], dtype=precision,
                                         initializer=tf.zeros_initializer)
-            gradient_like1_0 = tf.get_variable("gradient_like1_0", [self.ffn, self.m], dtype=precision,
-                                               initializer=tf.constant_initializer(-1.0, dtype=precision))
-            gradient_like2_0 = tf.get_variable("gradient_like2_0", [self.ffn, self.m], dtype=precision,
-                                               initializer=tf.constant_initializer(-1.0, dtype=precision))
-            gradient_like3_0 = tf.get_variable("gradient_like3_0", [self.ffn, self.m], dtype=precision,
-                                               initializer=tf.constant_initializer(-1.0, dtype=precision))
-            gradient_like4_0 = tf.get_variable("gradient_like4_0", [self.ffn, self.m], dtype=precision,
-                                               initializer=tf.constant_initializer(-1.0, dtype=precision))
-            feature_map_stats = tf.get_variable("feature_map_stats", [self.wh, self.m], dtype=precision,
-                                                initializer=tf.constant_initializer(1.0 / self.m, dtype=precision))
+            if self.grad and self.step_adapt:
+                gradient_like_0 = tf.get_variable("gradient_like_0", [self.ffn, self.m], dtype=precision,
+                                                  initializer=tf.constant_initializer(-1.0, dtype=precision))
 
             # the real variables
             if not self.init_fixed:
@@ -269,19 +219,15 @@ class FeatureExtractor:
             else:
                 q1 = tf.get_variable("q1", [self.ffn, self.m], dtype=precision,
                                      initializer=tf.constant_initializer(self.init_q))  # q
-
             q2 = tf.get_variable("q2", [self.ffn, self.m], dtype=precision,
-                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(1)
             q3 = tf.get_variable("q3", [self.ffn, self.m], dtype=precision,
-                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(2)
             q4 = tf.get_variable("q4", [self.ffn, self.m], dtype=precision,
-                                 #initializer=tf.random_uniform_initializer(-self.init_q, self.init_q))
                                  initializer=tf.constant_initializer(0.0))  # q^(3)
 
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
-            frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_0, 255.0), 0))
+            frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_1, 255.0), 0))
             t_reset_op = tf.assign(t, 0.0)
             frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
             motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
@@ -296,60 +242,14 @@ class FeatureExtractor:
             # checking day and night conditions
             is_day = tf.abs(is_night - 1.0)
 
-            condition1 = tf.cast(tf.less(norm_q_dot, self.eps1), precision) * \
+            condition = tf.cast(tf.less(norm_q_dot, self.eps1), precision) * \
                 tf.cast(tf.less(norm_q_dot_dot, self.eps2), precision) * \
                 tf.cast(tf.less(norm_q_dot_dot_dot, self.eps3), precision)
 
-            condition2 = tf.cast(tf.less(norm_q_dot, self.eps1 * self.zeta), precision) * \
-                tf.cast(tf.less(norm_q_dot_dot, self.eps2 * self.zeta), precision) * \
-                tf.cast(tf.less(norm_q_dot_dot_dot, self.eps3 * self.zeta), precision)
-
             if not self.day_only:
-                it_will_be_night = is_day * (1.0 - condition1) + is_night * (1.0 - condition2)
+                night = is_day * (1.0 - condition) + is_night * (1.0 - condition)
             else:
-                it_will_be_night = 0.0
-
-            # Using the right theta and step-size
-            conditioned_step_size = (self.step_size * (1.0 - it_will_be_night)
-                                     + self.step_size_night * it_will_be_night)
-            conditioned_theta = (self.theta * (1.0 - it_will_be_night)
-                                 + self.thetanight * it_will_be_night)
-            conditioned_alpha = (self.alpha * (1.0 - it_will_be_night)
-                                 + self.alpha_night * it_will_be_night)
-            conditioned_beta = (self.beta * (1.0 - it_will_be_night)
-                                 + self.beta_night * it_will_be_night)
-            conditioned_gamma = (self.gamma * (1.0 - it_will_be_night)
-                                 + self.gamma_night * it_will_be_night)
-            condition_go_to_night = it_will_be_night * is_day
-            condition_go_to_day = (1.0 - it_will_be_night) * is_night
-            condition_switch = condition_go_to_night + condition_go_to_day
-
-            step_mat = tf.ones_like(step_size1) * conditioned_step_size
-            step_size1_reset = tf.assign(step_size1, step_size1 * (1.0 - condition_switch)
-                                         + step_mat * condition_switch)
-            step_size2_reset = tf.assign(step_size2, step_size2 * (1.0 - condition_switch)
-                                         + step_mat * condition_switch)
-            step_size3_reset = tf.assign(step_size3, step_size3 * (1.0 - condition_switch)
-                                         + step_mat * condition_switch)
-            step_size4_reset = tf.assign(step_size4, step_size4 * (1.0 - condition_switch)
-                                         + step_mat * condition_switch)
-            reset_step_size = [step_size1_reset, step_size2_reset, step_size3_reset, step_size4_reset]
-
-            # blurring
-            frame_1 = (1.0 - it_will_be_night) * rho * frame_1
-
-            # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
-            spatial_gradient = tf.cast(
-                FeatureExtractor.__spatial_gradient(tf.cast(frame_1, tf.float32),
-                                                    self.h, self.w, self.n), precision)  # frame 1 here
-
-            # mixing the spatial gradient with motion (element-wise product + sum): h x w x n
-            v_delta_gamma = tf.reduce_sum(tf.multiply(spatial_gradient,
-                                                      motion_01), 2)  # broadcast (and then sum) over "n"
-            v_delta_gamma = tf.expand_dims(v_delta_gamma, 0)  # 1 x h x w x n
-
-            # derivative of the input over time (fed_one_over_delta = 0 when t = 0)
-            gamma_dot = tf.multiply(tf.subtract(frame_1, frame_0), fed_one_over_delta)  # 1 x h x w x n
+                night = 0.0
 
             # extracting patches from current frame (wh x filter_volume)
             frame_patches = self.__extract_patches(frame_1)
@@ -359,99 +259,73 @@ class FeatureExtractor:
             # mask_var = tf.expand_dims(tf.cast(tf.greater(var, 0.001), precision), 1)
             # frame_patches = tf.multiply(frame_patches, mask_var)
 
-            # extracting patches from "gamma_dot + v_delta_gamma" (wh x filter_volume)
-            gamma_dot_v_delta_patches = self.__extract_patches(tf.add(gamma_dot, v_delta_gamma))
+            if self.lambdaM > 0.0:
 
-            # computing a single block of M (filter volume x filter volume)
-            M_block_1 = tf.div(tf.matmul(frame_patches,
-                                         frame_patches, transpose_a=True), self.g_scale)
+                # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
+                spatial_gradient = tf.cast(
+                    FeatureExtractor.__spatial_gradient(tf.cast(frame_1, tf.float32),
+                                                        self.h, self.w, self.n), precision)  # frame 1 here
 
-            # computing a single block of O
-            O_block = tf.div(tf.matmul(gamma_dot_v_delta_patches,
-                                       gamma_dot_v_delta_patches, transpose_a=True), self.g_scale)
+                # mixing the spatial gradient with motion (element-wise product + sum): h x w x n
+                v_delta_gamma = tf.reduce_sum(tf.multiply(spatial_gradient,
+                                                          motion_01), 2)  # broadcast (and then sum) over "n"
+                v_delta_gamma = tf.expand_dims(v_delta_gamma, 0)  # 1 x h x w x n
 
-            # computing a single block of N
-            N_block_1 = tf.div(tf.matmul(gamma_dot_v_delta_patches,
-                                         frame_patches, transpose_a=True), self.g_scale)
+                # derivative of the input over time (fed_one_over_delta = 0 when t = 0)
+                gamma_dot = tf.multiply(tf.subtract(frame_1, frame_0), fed_one_over_delta)  # 1 x h x w x n
 
-            # computing "b" and B
-            b = tf.expand_dims(tf.div(tf.reduce_sum(frame_patches, 0), self.g_scale), 1)  # filter_volume x 1
-            B = tf.matmul(b, b, transpose_b=True)
+                # extracting patches from "gamma_dot + v_delta_gamma" (wh x filter_volume)
+                gamma_dot_v_delta_patches = self.__extract_patches(tf.add(gamma_dot, v_delta_gamma))
 
-            # other derivatives over time (fed_one_over_delta = 0 when t = 0)
-            M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0), fed_one_over_delta)  # filter vol x filter vol
-            N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0), fed_one_over_delta)  # filter vol x filter vol
+                # computing a single block of M (filter volume x filter volume)
+                M_block_1 = tf.div(tf.matmul(frame_patches,
+                                             frame_patches, transpose_a=True), self.g_scale)
 
-            if self.softmax:
-                # convolution
-                feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)  # wh x m
+                # computing a single block of O
+                O_block = tf.div(tf.matmul(gamma_dot_v_delta_patches,
+                                           gamma_dot_v_delta_patches, transpose_a=True), self.g_scale)
 
-                # objective function terms: ce, -ge, mi
-                biased_maps = float(self.gew) * feature_maps + (1.0 - float(self.gew)) * feature_map_stats
-                ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-                minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(biased_maps, 0))), self.g_scale * self.g_scale)
+                # computing a single block of N
+                N_block_1 = tf.div(tf.matmul(gamma_dot_v_delta_patches,
+                                             frame_patches, transpose_a=True), self.g_scale)
 
-                ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
-                minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
-
-                mi2 = - ce - minus_ge
-
-                mi = mi2 + 1.0
-
-                # objective function terms: probabilistic constraints
-                sum_to_one = tf.cast(tf.identity(0.0), precision)
-                negativeness = tf.cast(tf.identity(0.0), precision)
+                # other derivatives over time (fed_one_over_delta = 0 when t = 0)
+                M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0),
+                                          fed_one_over_delta)  # filter vol x filter vol
+                N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0),
+                                          fed_one_over_delta)  # filter vol x filter vol
             else:
-                # convolution
-                feature_maps = tf.add(tf.matmul(frame_patches, q1), 1.0 / self.m)  # wh x m
+                gamma_dot = tf.eye(1)
+                M_block_dot = tf.eye(1)
+                N_block_dot = tf.eye(1)
 
-                # objective function terms: ce, -ge, mi
-                ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-                minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 0))),
-                                  self.g_scale * self.g_scale)
+            # convolution
+            feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)  # wh x m
 
-                ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
-                minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
+            # objective function terms: ce, -ge, mi
+            biased_maps = float(self.gew) * feature_maps + (1.0 - float(self.gew)) * feature_map_stats
+            ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
+            minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(biased_maps, 0))), self.g_scale * self.g_scale)
 
-                mi2 = - ce - minus_ge
+            ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
+            minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
 
-                mi = mi2 + 1.0
+            mi2 = - ce - minus_ge
 
-                # masks for piecewise-linear constraints
-                if not self.prob_range:
-                    sum_feature_maps = None
-                    mask_sum_a = None
-                    mask_sum_b = None
-                    mask_sum_z = tf.cast(tf.less(feature_maps, 0.0), precision)  # wh x m
-                    mask = (-self.lambda0 / self.alpha) * mask_sum_z
-                else:
-                    sum_feature_maps = tf.expand_dims(tf.reduce_sum(feature_maps, 1), 1)  # wh x 1
-                    mask_sum_a = tf.cast(tf.less(sum_feature_maps, self.prob_a), precision)  # wh x 1
-                    mask_sum_b = tf.cast(tf.greater(sum_feature_maps, self.prob_b), precision)  # wh x 1
-                    mask_sum_z = tf.cast(tf.less(feature_maps, 0.0), precision)  # wh x m
-                    mask = (self.lambda1 / self.alpha) * tf.tile((mask_sum_b - mask_sum_a), [1, self.m]) \
-                           - (self.lambda0 / self.alpha) * mask_sum_z
-
-                # objective function terms: probabilistic constraints
-                if not self.prob_range:
-                    sum_to_one = 0.5 * tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(feature_maps, 1) - 1.0)), self.g_scale)
-                else:
-                    sum_to_one = tf.div(tf.reduce_sum(
-                            tf.multiply(mask_sum_b, sum_feature_maps - self.prob_b)
-                            - tf.multiply(mask_sum_a, sum_feature_maps - self.prob_a)), self.g_scale)
-
-                negativeness = -tf.div(tf.reduce_sum(tf.multiply(feature_maps, mask_sum_z)), self.g_scale)
+            mi = mi2 + 1.0
 
             # objective function terms: motion
-            motion = tf.reduce_sum(tf.multiply(q2, tf.matmul(M_block_1, q2))) \
-                + 2.0 * tf.reduce_sum(tf.multiply(q1, tf.matmul(N_block_1, q2))) \
-                + tf.reduce_sum(tf.multiply(q1, tf.matmul(O_block, q1)))
+            if self.lambdaM > 0.0:
+                motion = tf.reduce_sum(tf.multiply(q2, tf.matmul(M_block_1, q2))) \
+                    + 2.0 * tf.reduce_sum(tf.multiply(q1, tf.matmul(N_block_1, q2))) \
+                    + tf.reduce_sum(tf.multiply(q1, tf.matmul(O_block, q1)))
+            else:
+                motion = 0.0
 
             # objective function
-            obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + self.lambda0 * negativeness \
-                + self.lambda1 * sum_to_one + self.lambdaM * motion \
-                + conditioned_alpha * norm_q_dot_dot + conditioned_beta * norm_q_dot \
-                + conditioned_gamma * norm_q_mixed + self.k * norm_q
+            obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + \
+                + self.lambdaM * motion \
+                + self.alpha * norm_q_dot_dot + self.beta * norm_q_dot + self.gamma * norm_q_mixed + self.k * norm_q
 
             # real mutual information
             min_f = tf.reduce_min(feature_maps, 1)
@@ -473,213 +347,182 @@ class FeatureExtractor:
                 tf.reduce_sum(tf.multiply(avg_p_full_update, tf.div(tf.log(avg_p_full_update), np.log(self.m))))
             motion_full_update = tf.assign_add(motion_full, (motion - motion_full) / t_update)
 
+            # scaling
+            w = tf.exp(self.theta * t)
+            scaling = obj_comp_values[0] + w
+
+            # average on objective function terms
+            obj_comp = (obj_comp_values[1] + obj * w) / scaling
+            ce_comp = (obj_comp_values[2] + ce * w) / scaling
+            minus_ge_comp = (obj_comp_values[3] + minus_ge * w) / scaling
+            mi_comp = (obj_comp_values[4] + mi * w) / scaling
+            mi_real_comp = (obj_comp_values[5] + mi_real * w) / scaling
+            motion_comp = (obj_comp_values[6] + motion * w) / scaling
+            norm_q_comp = (obj_comp_values[7] + norm_q * w) / scaling
+            norm_q_dot_comp = (obj_comp_values[8] + norm_q_dot * w) / scaling
+            norm_q_dot_dot_comp = (obj_comp_values[9] + norm_q_dot_dot * w) / scaling
+            norm_q_mixed_comp = (obj_comp_values[10] + norm_q_mixed * w) / scaling
+            norm_q_dot_dot_dot_comp = (obj_comp_values[11] + norm_q_dot_dot_dot * w) / scaling
+
+            obj_values = tf.identity([1.0, obj, ce, minus_ge, mi, mi_real, motion,
+                                      norm_q, norm_q_dot, norm_q_dot_dot, norm_q_mixed, norm_q_dot_dot_dot])
+
+            obj_comp_values_updated = tf.assign(obj_comp_values, [scaling, obj_comp, ce_comp, minus_ge_comp,
+                                                                  mi_comp, mi_real_comp, motion_comp, norm_q_comp,
+                                                                  norm_q_dot_comp, norm_q_dot_dot_comp,
+                                                                  norm_q_mixed_comp, norm_q_dot_dot_dot_comp])
+
             # TensorBoard-related
-            tf.summary.scalar('J_Rho', rho)
-            tf.summary.scalar('C_MutualInformation', mi)
-            tf.summary.scalar('D_RealMutualInformation', mi_real)
-            tf.summary.scalar('E_ConditionalEntropy', ce)
-            tf.summary.scalar('F_MinusEntropy', minus_ge)
-            tf.summary.scalar('G_SumToOne', sum_to_one)
-            tf.summary.scalar('H_Negativeness', negativeness)
-            tf.summary.scalar('I_Motion', motion)
-            tf.summary.scalar('K_NormQ', norm_q)
-            tf.summary.scalar("L_NormQDot", norm_q_dot)
-            tf.summary.scalar("M_NormQDotDot", norm_q_dot_dot)
-            tf.summary.scalar("N_NormQDotDotDot", norm_q_dot_dot_dot)
-            tf.summary.scalar("O_NormQDot_QDotDot", norm_q_mixed)
-            tf.summary.scalar("P_RealMutualInformationFull", mi_real_full)
-            tf.summary.scalar("Q_MotionFull", motion_full_update)
-            tf.summary.scalar("B_IsNight", it_will_be_night)
-            tf.summary.scalar("A_FullObjectiveFunction", obj)
-            tf.summary.scalar("R_Q[0][0]", q1[0][0])
+            tf.summary.scalar("AA_Night", night)
+            tf.summary.scalar('AB_Rho', rho)
+            tf.summary.scalar("AC_RealMutualInformationFull", mi_real_full)
+            tf.summary.scalar("AD_MotionFull", motion_full_update)
 
-            # moving-average on objective function terms
-            if self._moving_avg_obj > 0.0:
-                obj_values_normalized = tf.assign(obj_values,
-                                                  tf.multiply(obj_values, 1.0 - self._moving_avg_obj)
-                                                  + tf.multiply([ce, minus_ge, mi, mi_real, sum_to_one,
-                                                                 negativeness, motion, norm_q,
-                                                                 norm_q_dot, norm_q_dot_dot,
-                                                                 norm_q_mixed, obj], self._moving_avg_obj))
+            tf.summary.scalar("BA_CognitiveAction", obj)
+            tf.summary.scalar('BB_MutualInformation', mi)
+            tf.summary.scalar('BC_RealMutualInformation', mi_real)
+            tf.summary.scalar('BD_ConditionalEntropy', ce)
+            tf.summary.scalar('BE_MinusEntropy', minus_ge)
+            tf.summary.scalar('BF_Motion', motion)
+            tf.summary.scalar('BG_NormQ', norm_q)
+            tf.summary.scalar("BH_NormQDot", norm_q_dot)
+            tf.summary.scalar("BI_NormQDotDot", norm_q_dot_dot)
+            tf.summary.scalar("BJ_NormQDot_QDotDot", norm_q_mixed)
+            tf.summary.scalar("BK_NormQDotDotDot", norm_q_dot_dot_dot)
 
-                ce = obj_values_normalized[0]
-                minus_ge = obj_values_normalized[1]
-                mi = obj_values_normalized[2]
-                mi_real = obj_values_normalized[3]
-                sum_to_one = obj_values_normalized[4]
-                negativeness = obj_values_normalized[5]
-                motion = obj_values_normalized[6]
-                norm_q = obj_values_normalized[7]
-                norm_q_dot = obj_values_normalized[8]
-                norm_q_dot_dot = obj_values_normalized[9]
-                norm_q_mixed = obj_values_normalized[10]
-                obj = obj_values_normalized[11]
+            tf.summary.scalar("CA_CompleteCognitiveAction", obj_comp)
+            tf.summary.scalar('CB_CompleteMutualInformation', mi_comp)
+            tf.summary.scalar('CC_CompleteRealMutualInformation', mi_real_comp)
+            tf.summary.scalar('CD_CompleteConditionalEntropy', ce_comp)
+            tf.summary.scalar('CE_CompleteMinusEntropy', minus_ge_comp)
+            tf.summary.scalar('CF_CompleteMotion', motion_comp)
+            tf.summary.scalar('CG_CompleteNormQ', norm_q_comp)
+            tf.summary.scalar("CH_CompleteNormQDot", norm_q_dot_comp)
+            tf.summary.scalar("CI_CompleteNormQDotDot", norm_q_dot_dot_comp)
+            tf.summary.scalar("CJ_CompleteNormQDot_QDotDot", norm_q_mixed_comp)
+            tf.summary.scalar("CK_CompleteNormQDotDotDot", norm_q_dot_dot_dot_comp)
 
             # intermediate terms
-            M_block_1_q1 = tf.matmul(M_block_1, q1)  # filter_volume x m
-            N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
+            if self.lambdaM > 0.0:
+                N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
 
             # D (this is just a portion of the D matrix in the paper)
-            D = (self.k / conditioned_alpha) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM * conditioned_theta) / conditioned_alpha) * N_block_1_trans \
-                + (self.lambdaM / conditioned_alpha) * tf.subtract(O_block, tf.transpose(N_block_dot)) \
-
-            if not self.softmax:
-                D = D + (self.lambdaE / conditioned_alpha) * B
-                D_q1 = tf.matmul(D, q1) - (self.lambdaC / conditioned_alpha) * M_block_1_q1
-
-                if not self.prob_range:
-                    D_q1 = D_q1 + tf.tile((self.lambda1 / conditioned_alpha) *
-                                          tf.expand_dims(tf.reduce_sum(M_block_1_q1, 1), 1), [1, self.m])
+            if self.lambdaM > 0.0:
+                D = self.k * tf.cast(tf.eye(self.ffn), precision) \
+                    - (self.lambdaM * self.theta) * N_block_1_trans \
+                    + self.lambdaM * tf.subtract(O_block, tf.transpose(N_block_dot))
             else:
-                D_q1 = tf.matmul(D, q1)
+                D = self.k * tf.cast(tf.eye(self.ffn), precision)
 
             # C
-            C = (((conditioned_gamma / conditioned_alpha) * conditioned_theta * conditioned_theta) \
-                - (conditioned_beta / conditioned_alpha) * conditioned_theta) * tf.cast(tf.eye(self.ffn), precision) \
-                - ((self.lambdaM / conditioned_alpha) * conditioned_theta) * M_block_1 \
-                - (self.lambdaM / conditioned_alpha) * (M_block_dot + N_block_1_trans - N_block_1)
-
-            C_q2 = tf.matmul(C, q2)
+            if self.lambdaM > 0.0:
+                C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
+                    tf.cast(tf.eye(self.ffn), precision) \
+                    - (self.lambdaM * self.theta) * M_block_1 \
+                    - self.lambdaM * (M_block_dot + N_block_1_trans - N_block_1)
+            else:
+                C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
+                    tf.cast(tf.eye(self.ffn), precision)
 
             # B
-            Bbb = (conditioned_theta * conditioned_theta + (conditioned_gamma / conditioned_alpha) * conditioned_theta
-                   - (conditioned_beta / conditioned_alpha)) \
-                  * tf.cast(tf.eye(self.ffn), precision) - (self.lambdaM / conditioned_alpha) * M_block_1
-
-            B_q3 = tf.matmul(Bbb, q3)
+            if self.lambdaM > 0.0:
+                B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
+                    * tf.cast(tf.eye(self.ffn), precision) - self.lambdaM * M_block_1
+            else:
+                B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
+                    * tf.cast(tf.eye(self.ffn), precision)
 
             # A
-            A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
-
-            tf.summary.scalar("Z_Dq1", tf.square(tf.norm(D_q1)))
-            tf.summary.scalar("Z_Cq2", tf.square(tf.norm(C_q2)))
-            tf.summary.scalar("Z_Bq3", tf.square(tf.norm(B_q3)))
-            tf.summary.scalar("Z_Aq4", tf.square(tf.norm(A_q4)))
+            A = 2.0 * self.theta * self.alpha
 
             # F
-            if not self.softmax:
-                nab_ws = tf.div(tf.matmul(frame_patches, mask, transpose_a=True), self.g_scale)  # filter_volume x m
-                F = ((self.lambdaE - self.lambdaC) / (self.m * conditioned_alpha)) * b + nab_ws
-            else:
-                g = 1.0 / self.g_scale
-                Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
-                Ss = feature_maps * feature_maps * g
-                F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
-                F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
-                F = tf.matmul(frame_patches, (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce, transpose_a=True)
-                tf.summary.scalar("Norm_F", tf.square(tf.norm(F)))
+            g = 1.0 / self.g_scale
+            Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
+            Ss = feature_maps * feature_maps * g
+            F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
+            F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
+            F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
 
             # update terms
+            D_q1 = tf.matmul(D, q1)
+            C_q2 = tf.matmul(C, q2)
+            B_q3 = tf.matmul(B, q3)
+            A_q4 = A * q4
+
             gradient_like1 = -q2
             gradient_like2 = -q3
             gradient_like3 = -q4
-            gradient_like4 = D_q1 + C_q2 + B_q3 + A_q4 + F
-
-
+            gradient_like4 = (D_q1 + C_q2 + F + B_q3 + A_q4) / self.alpha
 
             # step sizes
-            with tf.control_dependencies(reset_step_size):
-                if self.step_adapt:
-                    increase1 = tf.cast(tf.greater(gradient_like1 * gradient_like1_0, 0.0), precision)
-                    #increase1 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
-                    reduce1 = 1.0 - increase1
-                    step_size1_up = tf.assign(step_size1,
-                                           tf.minimum(tf.maximum(step_size1_reset * 0.1 * reduce1 +
-                                                                 step_size1_reset * 2.0 * increase1,
-                                                                 conditioned_step_size), conditioned_step_size * 1000))
-                    increase2 = tf.cast(tf.greater(gradient_like2 * gradient_like2_0, 0.0), precision)
-                    #increase2 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
-                    reduce2 = 1.0 - increase2
-                    step_size2_up = tf.assign(step_size2,
-                                           tf.minimum(tf.maximum(step_size2_reset * 0.1 * reduce2 +
-                                                                 step_size2_reset * 2.0 * increase2,
-                                                                 conditioned_step_size), conditioned_step_size * 1000))
-                    increase3 = tf.cast(tf.greater(gradient_like3 * gradient_like3_0, 0.0), precision)
-                    #increase3 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
-                    reduce3 = 1.0 - increase3
-                    step_size3_up = tf.assign(step_size3,
-                                           tf.minimum(tf.maximum(step_size3_reset * 0.1 * reduce3 +
-                                                                 step_size3_reset * 2.0 * increase3,
-                                                                 conditioned_step_size), conditioned_step_size * 1000))
-                    increase4 = tf.cast(tf.greater(gradient_like4 * gradient_like4_0, 0.0), precision)
-                    #increase4 = tf.cast(tf.greater(obj_prev - obj, 0.0), precision)
-                    reduce4 = 1.0 - increase4
-                    step_size4_up = tf.assign(step_size4,
-                                           tf.minimum(tf.maximum(step_size4_reset * 0.1 * reduce4 +
-                                                                 step_size4_reset * 2.0 * increase4,
-                                                                 conditioned_step_size), conditioned_step_size * 1000))
+            with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
+                if not self.grad:
+                    step_size_up = tf.assign(step_size, tf.ones_like(step_size) * (1.0 - night) * self.step_size)
                 else:
-                    step_size1_up = step_size1_reset
-                    step_size2_up = step_size2_reset
-                    step_size3_up = step_size3_reset
-                    step_size4_up = step_size4_reset
+                    if self.step_adapt:
+                        increase = tf.cast(tf.greater(gradient_like4 * gradient_like_0, 0.0), precision)
+                        reduce = 1.0 - increase
+                        step_size_up = tf.assign(step_size,
+                                                 tf.minimum(tf.maximum(step_size * 0.1 * reduce +
+                                                                       step_size * 2.0 * increase,
+                                                                       self.step_size), self.step_size * 1000))
+                    else:
+                        step_size_up = step_size
 
             # update rules
-            with tf.control_dependencies([step_size1_up, step_size2_up, step_size3_up, step_size4_up]):
+            with tf.control_dependencies([step_size_up]):
                 if not self.grad:
-                    with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
-                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size1_up * (1.0 - it_will_be_night))
-                        with tf.control_dependencies([up_q1]):
-                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size2_up * (1.0 - it_will_be_night) + q2 * it_will_be_night)
-                            with tf.control_dependencies([up_q2]):
-                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size3_up * (1.0 - it_will_be_night) + q3 * it_will_be_night)
-                                with tf.control_dependencies([up_q3]):
-                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size4_up * (1.0 - it_will_be_night) + q4 * it_will_be_night)
-                                    tf.summary.scalar("Z_update", tf.square(tf.norm(gradient_like4)))
-                                    tf.summary.scalar("ZZ_hkjhdjk", tf.square(tf.norm(gradient_like4 * step_size4_up)))
-
+                    up_q1 = tf.assign_sub(q1, gradient_like1 * step_size_up)
+                    with tf.control_dependencies([up_q1]):
+                        up_q2 = tf.assign_sub(q2, gradient_like2 * step_size_up + q2 * night)
+                        with tf.control_dependencies([up_q2]):
+                            up_q3 = tf.assign_sub(q3, gradient_like3 * step_size_up + q3 * night)
+                            with tf.control_dependencies([up_q3]):
+                                up_q4 = tf.assign_sub(q4, gradient_like4 * step_size_up + q4 * night)
                 else:
-                    up_q4 = tf.assign_sub(q1, gradient_like4 * step_size4_up)
+                    up_q4 = tf.assign_sub(q1, gradient_like4 * step_size_up)
 
-            # updating cyclic dependencies
-            with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot, up_q4]):
+            # updating cyclic dependencies and stats
+            with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot, step_size_up, minus_ge2]):
                 up_frame_0 = tf.assign(frame_0, frame_1)
-                up_M_block_0 = tf.assign(M_block_0, M_block_1)
-                up_N_block_0 = tf.assign(N_block_0, N_block_1)
-                up_gradient_like1 = tf.assign(gradient_like1_0, gradient_like1)
-                up_gradient_like2 = tf.assign(gradient_like2_0, gradient_like2)
-                up_gradient_like3 = tf.assign(gradient_like3_0, gradient_like3)
-                up_gradient_like4 = tf.assign(gradient_like4_0, gradient_like4)
-                obj_prev = tf.assign(obj_prev, obj)
-                if self.softmax:
-                    up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
+
+                if self.lambdaM > 0.0:
+                    up_M_block_0 = tf.assign(M_block_0, M_block_1)
+                    up_N_block_0 = tf.assign(N_block_0, N_block_1)
                 else:
-                    up_feature_map_stats = tf.eye(1)
+                    up_M_block_0 = tf.eye(1)
+                    up_N_block_0 = tf.eye(1)
+
+                if self.step_adapt and self.grad:
+                    up_gradient_like_0 = tf.assign(gradient_like_0, gradient_like4)
+                else:
+                    up_gradient_like_0 = tf.eye(1)
+
+                up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
 
                 diff_rho = 1.0 - rho
-                up_night = tf.assign(is_night, it_will_be_night)
-                up_rho = tf.assign_add(rho,
-                                       self.eta * tf.cast(tf.greater(diff_rho, 0.0), precision)
-                                       * diff_rho * (1.0 - it_will_be_night))
+                up_night = tf.assign(is_night, night)
+                up_rho = tf.assign_add(rho, self.eta * tf.cast(tf.greater(diff_rho, 0.0), precision)
+                                       * diff_rho * (1.0 - night))
 
             # coordinator
             with tf.control_dependencies([up_q4, up_frame_0, up_M_block_0, up_N_block_0,
-                                          up_gradient_like1, up_gradient_like2, up_gradient_like3, up_gradient_like4,
-                                          up_feature_map_stats, up_rho, up_night, obj_prev]):
+                                          up_gradient_like_0, t_update,
+                                          up_feature_map_stats, up_rho, up_night, obj_comp_values_updated]):
                 fake_op = tf.eye(1)
-                #fake_op = [
-                            #tf.Print(step_size1_up, [step_size1_up[0][0]], "step_size1_up[0][0]=", summarize=100000000),
-                            #tf.Print(step_size2_up, [step_size2_up[0][0]], "step_size2_up[0][0]=", summarize=100000000),
-                            #tf.Print(step_size3_up, [step_size3_up[0][0]], "step_size3_up[0][0]=", summarize=100000000),
-                            #tf.Print(step_size4_up, [step_size4_up[0][0]], "step_size4_up[0][0]=", summarize=100000000),
-                            #tf.Print(up_q3, [up_q3], "up_q3=", summarize=100000000)
-                           #]
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
             out_feature_maps = tf.reshape(feature_maps, [self.h, self.w, self.m])  # h x w x m
             out_filters_map = tf.transpose(tf.reshape(q1, [self.f * self.f, self.n, self.m]))  # m x n x f^2
 
             # summaries
+            tf.summary.scalar("ZA_Norm_FTimesAlpha", tf.reduce_sum(tf.square(F)))
+            tf.summary.scalar("ZB_Q00", q1[0][0])
             summary_ops = tf.summary.merge_all()
 
-            ops = [out_feature_maps,
-                   out_filters_map,
-                   mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, norm_q_dot_dot,
-                   norm_q_dot_dot_dot,
-                   norm_q_mixed, obj,
-                   up_night,
-                   up_rho,
+            ops = [out_feature_maps, out_filters_map,
+                   obj_values, obj_comp_values_updated,
+                   up_night, up_rho,
                    mi_real_full, motion_full_update,
                    summary_ops,
                    fake_op]
@@ -713,29 +556,27 @@ class FeatureExtractor:
                                                    rates=[1, 1, 1, 1],
                                                    padding='SAME'), [self.wh, self.ffn])
 
-    def __gradient_likes(self, D, C, Bbb, conditioned_theta, conditioned_alpha, g, frame_patches, q1, q2, q3, q4):
-        D_q1 = tf.matmul(D, q1)
-        C_q2 = tf.matmul(C, q2)
-        B_q3 = tf.matmul(Bbb, q3)
-        A_q4 = tf.multiply(q4, 2.0 * conditioned_theta)
+    # work-in-progress (Runge-Kutta): this is unused right now
+    def __gradient_likes(self, mat_a, mat_b, mat_c, mat_d, g, q1, q2, q3, q4, t, precision):
+        D_q1 = tf.matmul(mat_d, q1)
+        C_q2 = tf.matmul(mat_c, q2)
+        B_q3 = tf.matmul(mat_b, q3)
+        A_q4 = mat_a * q4
 
-        # frame_patches = self.__extract_patches(tf.expand_dims(tf.div(tf.identity(self.stream.get_at(t=1.0, w=self.w, h=self.h, force_gray=self.n==1)), 255.0), 0))
+        current_img, current_of = self.stream.get_next(0.0, t=t, sample_only=True)
+        frame_patches = self.__extract_patches(tf.expand_dims(
+            tf.div(tf.cast(tf.identity(current_img), precision), 255.0), 0))
+
         feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)
         Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
         Ss = feature_maps * feature_maps * g
         F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
         F_ce = -Ss + feature_maps * tf.expand_dims(tf.reduce_sum(Ss, 1), 1)
-        F = tf.matmul(frame_patches,
-                      (self.lambdaE / conditioned_alpha) * F_ge + (self.lambdaC / conditioned_alpha) * F_ce,
-                      transpose_a=True)
+        F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
 
         gradient_like1 = tf.identity(-q2)
         gradient_like2 = tf.identity(-q3)
         gradient_like3 = tf.identity(-q4)
-        gradient_like4 = tf.identity(D_q1 + C_q2 + B_q3 + A_q4 + F)
+        gradient_like4 = tf.identity(D_q1 + C_q2 + F + B_q3 + A_q4) / self.alpha
 
         return gradient_like1, gradient_like2, gradient_like3, gradient_like4
-
-
-
-

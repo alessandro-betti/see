@@ -7,12 +7,13 @@ from opticalflow import OpticalFlow
 import numpy as np
 from gzip import GzipFile
 import json
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class InputStream:
     files_per_folder = 100   # global parameter
 
-    def __init__(self, input_element, input_is_video):
+    def __init__(self, input_element, input_is_video, blur):
         self.input = input_element
         self.input_is_video = input_is_video
         self.optical_flow_processor = OpticalFlow()
@@ -21,10 +22,18 @@ class InputStream:
         self.h = -1
         self.c = -1
         self.frames = -1
+        self.max_frames = -1
         self.fps = -1
+        self.__blur = blur
+        self.__req_w = -1
+        self.__req_h = -1
+        self.__req_fps = -1
+        self.__force_gray = False
         self.__video_capture = None
         self.__last_returned_frame = None
         self.__last_returned_frame_number = 0
+        self.__last_returned_of = None
+        self.__last_returned_time = 0.0
         self.__getinfo()
 
     def is_video(self):
@@ -34,46 +43,89 @@ class InputStream:
         return not self.input_is_video
 
     def reset(self):
-        self.__init__(self.input, self.input_is_video)
+        w = self.__req_w
+        h = self.__req_h
+        fps = self.__req_fps
+        force_gray = self.__force_gray
+        max_frames = self.max_frames
+        self.__init__(self.input, self.input_is_video, self.__blur)
+        self.set_options(w, h, fps, force_gray, max_frames)
 
-    def set_frame_number(self, frame, w=-1, h=-1, fps=-1, last_frame_number=-1, force_gray=False):
+    def set_options(self, w, h, fps, force_gray, max_frames):
+        self.__req_w = w
+        self.__req_h = h
+        self.__req_fps = fps
+        self.__force_gray = force_gray
+        self.max_frames = max_frames
+
+    def set_last_frame_and_time(self, frame, seconds):
         self.__last_returned_frame_number = frame - 1
         if self.is_video():
-            self.get_next(w, h, fps, last_frame_number, force_gray)
-            next_time = (float(self.__last_returned_frame_number) / float(fps)) * 1000.0
-            self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, next_time)
+            self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, seconds * 1000.0)
 
-    def get_frame_number(self):
+    def get_last_frame_number(self):
         return self.__last_returned_frame_number
 
-    def get_next(self, w=-1, h=-1, fps=-1, last_frame_number=-1, force_gray=False):
+    def get_last_frame_time(self):
+        return self.__last_returned_time / 1000.0
+
+    def get_next(self, blur_factor=0.0, t=-1, sample_only=False):
         img = None
-        of = None
         next_time = None
+        compute_motion = True
+        f = None
 
+        # check
+        if 0 < self.max_frames <= self.__last_returned_frame_number:
+            return None, None
+
+        # opening stream (if not already opened)
         if self.is_video():
-            if last_frame_number > 0:
-                if self.__last_returned_frame_number == last_frame_number:
-                    return None, None
-
             if self.__video_capture is None or not self.__video_capture.isOpened():
                 if self.input != "0":
                     self.__video_capture = cv2.VideoCapture(self.input)
+                    self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, self.__last_returned_time)
                 else:
                     self.__video_capture = cv2.VideoCapture(0)
+        else:
+            f = self.__last_returned_frame_number
 
-            if fps > 0 and fps != self.fps and self.input != "0":
-                next_time = (float(self.__last_returned_frame_number) / float(fps)) * 1000.0
-                self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, next_time)
+        # setting time for the next frame
+        if self.input != "0":
+            if t > 0.0:
+                next_time = t * 1000.0
+                if next_time >= self.__last_returned_time:
+                    if self.__video_capture is not None:
+                        self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, next_time)
+                    f = Decimal(t * float(self.__req_fps)).quantize(0, ROUND_HALF_UP)
+                else:
+                    raise IOError("Cannot seek back in time!")
+            else:
+                if self.__req_fps != self.fps and self.__req_fps > 0.0:
+                    next_time = self.__last_returned_time + (1000.0 / float(self.__req_fps))
 
-            # getting a new frame
+                    # detect changes when asking for a number of FPS than is bigger than the original one
+                    if self.__req_fps > self.fps and self.__last_returned_frame_number > 0:
+                        next_frame_original_fps = (next_time * float(self.fps)) / 1000.0
+                        cur_frame_original_fps = (self.__last_returned_time * float(self.fps)) / 1000.0
+                        if Decimal(next_frame_original_fps).quantize(0, ROUND_HALF_UP) == \
+                                Decimal(cur_frame_original_fps).quantize(0, ROUND_HALF_UP):
+                            compute_motion = False
+
+                    if self.__video_capture is not None:
+                        self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, next_time)
+                    f = Decimal(next_time * float(self.__req_fps)).quantize(0, ROUND_HALF_UP)
+
+        # getting a new frame
+        if self.is_video():
             ret_val, img = self.__video_capture.read()
 
             if not ret_val:
-                if self.input != "0" and fps > 0 and \
-                        fps != self.fps and next_time == self.__video_capture.get(cv2.CAP_PROP_POS_MSEC):
+                if self.input != "0" and self.__req_fps > 0 and \
+                        self.__req_fps != self.fps and next_time == self.__video_capture.get(cv2.CAP_PROP_POS_MSEC):
                     raise IOError("Unable to capture frames from video!")
-                elif self.input != "0" and fps <= 0 and self.__video_capture.get(cv2.CAP_PROP_POS_AVI_RATIO) < 1.0:
+                elif self.input != "0" and self.__req_fps <= 0 and \
+                        self.__video_capture.get(cv2.CAP_PROP_POS_AVI_RATIO) < 1.0:
                     raise IOError("Unable to capture frames from video!")
                 else:
                     self.__video_capture.release()
@@ -82,45 +134,63 @@ class InputStream:
             if img is None:
                 return None, None
 
-            if (w > 0 and h > 0) and (w != self.w or h != self.h):
-                img = cv2.resize(img, (w, h))
-
-            # computing optical flow
-            of = self.optical_flow_processor.compute_flow(img)
-
         elif self.is_folder():
-            f = self.__last_returned_frame_number
             n_folder = int(f / self.__files_per_folder) + 1
             n_file = (f + 1) - ((n_folder - 1) * self.__files_per_folder)
 
             folder_name = format(n_folder, '08d')
             file_name = format(n_file, '03d')
 
-            # getting a new frame
             if os.path.exists(self.input + os.sep + "frames" + os.sep + folder_name + os.sep + file_name + ".png"):
                 img = cv2.imread(self.input + os.sep + "frames" + os.sep + folder_name + os.sep + file_name + ".png")
             else:
                 return None, None
 
-            # loading or computing optical flow
-            if os.path.exists(self.input + os.sep + "motion" + os.sep + folder_name + os.sep + file_name + ".of"):
-                self.optical_flow_processor.compute_flow(img, pass_by=True)  # no computations are done here
-                of = self.optical_flow_processor.load_flow(
-                    self.input + os.sep + "motion" + os.sep + folder_name + os.sep + file_name + ".of")
+        # rescaling
+        if (self.__req_w > 0 and self.__req_h > 0) and (self.__req_w != self.w or self.__req_h != self.h):
+            img = cv2.resize(img, (self.__req_w, self.__req_h))
+
+        # blurring
+        if blur_factor > 0.0:
+            if blur_factor > 1.0:
+                raise ValueError("Invalid blur factor (it must be in [0,1]): " + str(blur_factor))
+            ww, hh, dd = img.shape
+            kernel_size = int(round(float(min(ww, hh)) * 0.25 * blur_factor))
+            if kernel_size % 2 == 0:
+                kernel_size = kernel_size + 1
+            if self.__blur:
+                img = ((1.0 - blur_factor) * cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)).astype(np.uint8)
             else:
-                of = self.optical_flow_processor.compute_flow(img)
+                img = ((1.0 - blur_factor) * img).astype(np.uint8)
+        else:
+            if blur_factor < 0.0:
+                raise ValueError("Invalid blur factor (it must be in [0,1]): " + str(blur_factor))
 
-        self.__last_returned_frame_number = self.__last_returned_frame_number + 1
-        self.__last_returned_frame = img
+        # computing optical flow
+        if compute_motion or self.__last_returned_of is None:
+            of = self.optical_flow_processor.compute_flow(img,
+                                                          pass_by=(self.__last_returned_of is None),
+                                                          do_not_update_frame_references=sample_only)
+        else:
+            of = self.__last_returned_of
 
-        # open CV is buggy in counting frames...
-        if self.__last_returned_frame_number > self.frames:
-            self.frames = self.__last_returned_frame_number
+        if not sample_only:
+            if next_time is None:
+                next_time = self.__last_returned_time + (1000.0 / float(self.fps))
 
-        if not force_gray:
+            self.__last_returned_frame_number = self.__last_returned_frame_number + 1
+            self.__last_returned_time = next_time
+            self.__last_returned_frame = img
+            self.__last_returned_of = of
+
+            # open CV is buggy in counting frames...
+            if self.__last_returned_frame_number > self.frames:
+                self.frames = self.__last_returned_frame_number
+
+        if not self.__force_gray:
             return img, of
         else:
-            return np.reshape(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (h, w, 1)), of
+            return np.reshape(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (self.__req_h, self.__req_w, 1)), of
 
     def __getinfo(self):
         if self.is_video():
@@ -221,6 +291,13 @@ class InputStream:
                     raise ValueError("Invalid frame count: " + str(self.frames))
                 if self.w <= 0 or self.h <= 0:
                     raise ValueError("Invalid resolution: " + str(self.w) + "x" + str(self.h))
+
+                try:
+                    opts = json.load(open(self.input + os.sep + "options.txt"))
+                    self.fps = float(opts['fps'])
+                except (ValueError, IOError):
+                    raise IOError("Options file is missing/unreadable! (needed to read the FPS value): "
+                                  + self.input + os.sep + "options.txt")
             else:
                 raise ValueError("No frames in: " + self.input + os.sep + "frames" + os.sep)
 
@@ -313,5 +390,5 @@ class OutputStream:
         json.dump(self.__options, f, indent=4)
         f.close()
 
-    def set_frame_number(self, last_frame_number):
+    def set_last_frame(self, last_frame_number):
         self.__last_saved_frame_number = last_frame_number - 1

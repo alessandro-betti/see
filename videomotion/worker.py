@@ -1,7 +1,6 @@
 import numpy as np
 import time
 from feature_extractor import FeatureExtractor
-#from feature_extractor_net import FeatureExtractor
 from utils import out
 import json
 
@@ -12,20 +11,16 @@ class Worker:
                  force_gray=False, repetitions=1, options=None, resume=False, reset_stream_when_resuming=False):
         self.input_stream = input_stream
         self.output_stream = output_stream
-        self.w = w
-        self.h = h
-        self.fps = fps
-        self.frames = frames
-        self.force_gray = force_gray
         self.repetitions = repetitions
         self.__completed_repetitions = 0
-        self.__previous_img = None
         self.__start_time = None
         self.__elapsed_time = None
-        self.__rho = 0.0
+        self.__rho = options['rho']
         self.steps = 0.0
         self.measured_fps = 0.0
         self.save_scores_only = options['save_scores_only']
+        options['stream'] = self.input_stream
+        self.input_stream.set_options(w, h, fps, force_gray, frames)
         self.fe = FeatureExtractor(w, h, options, resume)  # here is the TensorFlow based feature extractor!
 
         if resume:
@@ -38,7 +33,9 @@ class Worker:
     def save(self):
         self.fe.save()
 
-        info = {'steps': self.steps, 'frame': self.input_stream.get_frame_number()}
+        info = {'steps': self.steps,
+                'frame': self.input_stream.get_last_frame_number(),
+                'time': self.input_stream.get_last_frame_time()}
 
         f = open(self.fe.save_path + ".info.txt", "w")
         if f is None or not f or f.closed:
@@ -57,13 +54,9 @@ class Worker:
             self.steps = info['steps']
             self.fe.load(self.steps)
 
-            self.input_stream.set_frame_number(info['frame'] - 1, self.w, self.h, self.fps,
-                                               self.frames, self.force_gray)
-            current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps,
-                                                                 self.frames, self.force_gray)
-            self.__previous_img = current_img
-
-            self.output_stream.set_frame_number(info['frame'])
+            self.input_stream.get_next(sample_only=True)  # ensure that the stream is open
+            self.input_stream.set_last_frame_and_time(info['frame'], info['time'])
+            self.output_stream.set_last_frame(info['frame'])
         else:
             self.steps = 0.0
             self.fe.load(1)
@@ -82,18 +75,13 @@ class Worker:
 
             # get the frame to process at the next step and the currently needed motion field
             step_load_time = time.time()
-            current_img, current_of = self.input_stream.get_next(self.w, self.h, self.fps, self.frames, self.force_gray)
-
-            # fixing the case of the first frame
-            if self.__previous_img is None:
-                self.__previous_img = current_img.copy()
+            current_img, current_of = self.input_stream.get_next(blur_factor=(1.0-self.__rho))
 
             # handling repetitions
             if current_img is None:
                 self.__completed_repetitions = self.__completed_repetitions + 1
                 if self.__completed_repetitions < self.repetitions:
                     self.input_stream.reset()
-                    self.__previous_img = None
                 else:
                     break
             else:
@@ -104,10 +92,8 @@ class Worker:
             step_load_time = time.time() - step_load_time
 
             # extracting features
-            features, filters, mi, mi_real, ce, minus_ge, sum_to_one, negativeness, motion, norm_q, norm_q_dot, \
-                norm_q_dot_dot, \
-                norm_q_dot_dot_dot, norm_q_mixed, all_terms, is_night, \
-                next_rho, mi_real_full, motion_full = self.fe.run_step(self.__previous_img, current_img, current_of)
+            features, filters, obj_values, obj_comp_values, is_night, next_rho, mi_real_full, motion_full = \
+                self.fe.run_step(current_img, current_of)
 
             # output-info
             if is_night == 1.0:
@@ -115,24 +101,30 @@ class Worker:
             else:
                 light = "day"
 
-            out("\t[status=" + light + ", rho=" + str(self.__rho) + ", action_approx=" + str(all_terms)
+            out("\t[status=" + light + ", rho=" + str(self.__rho) + ", action_cur=" + str(obj_values[1])
                 + ", mi_real_full=" + str(mi_real_full) + ", motion_full=" + str(motion_full)
-                + ",\n\t mi_real=" + str(mi_real) + ", mi=" + str(mi) + ", ce=" + str(ce)
-                + ", minus_ge=" + str(minus_ge)
-                + ", sum1=" + str(sum_to_one)
-                + ", negativeness=" + str(negativeness) + ", motion=" + str(motion) + ",\n\t norm_q="
-                + str(norm_q) + ", norm_q'=" + str(norm_q_dot) + ", norm_q''=" + str(norm_q_dot_dot)
-                + ", norm_q'''=" + str(norm_q_dot_dot_dot)
-                + ", q'q''=" + str(norm_q_mixed) + "]")
+                + ",\n\t mi_real=" + str(obj_values[5]) + ", mi=" + str(obj_values[4])
+                + ", ce=" + str(obj_values[2])
+                + ", minus_ge=" + str(obj_values[3])
+                + ", motion=" + str(obj_values[6])
+                + ",\n\t norm_q=" + str(obj_values[7]) + ", q'q''=" + str(obj_values[10])
+                + ", norm_q'=" + str(obj_values[8]) + "/" + "{0:.2f}".format(self.fe.eps1)
+                + ", norm_q''=" + str(obj_values[9]) + "/" + "{0:.2f}".format(self.fe.eps2)
+                + ", norm_q'''=" + str(obj_values[11]) + "/" + "{0:.2f}".format(self.fe.eps3) + "]")
 
-            others = {'mi': float(mi), 'mi_real': float(mi_real), 'ce': float(ce), 'minus_ge': float(minus_ge),
-                      'sum_to_one': float(sum_to_one),
-                      'negativeness': float(negativeness),
-                      'motion': float(motion), 'norm_q': float(norm_q), 'norm_q_dot': float(norm_q_dot),
-                      'norm_q_dot_dot': float(norm_q_dot_dot),
-                      'norm_q_dot_dot_dot': float(norm_q_dot_dot_dot), 'norm_q_mixed': float(norm_q_mixed),
-                      'all': float(all_terms),
-                      'is_night': float(is_night), 'rho': float(self.__rho)}
+            others = {'status': light, 'rho': float(self.__rho), 'action_cur': float(obj_values[1]),
+                      'mi_real_full': float(mi_real_full), 'motion_full': float(motion_full),
+                      'mi_real': float(obj_values[5]), 'mi': float(obj_values[4]),
+                      'ce': float(obj_values[2]),
+                      'minus_ge': float(obj_values[3]),
+                      'motion': float(obj_values[6]), 'norm_q': float(obj_values[7]),
+                      'norm_q_mixed': float(obj_values[10]),
+                      'norm_q_dot': float(obj_values[8]),
+                      'norm_q_dot_dot': float(obj_values[9]),
+                      'norm_q_dot_dot_dot': float(obj_values[11]),
+                      'eps1': self.fe.eps1,
+                      'eps2': self.fe.eps2,
+                      'eps3': self.fe.eps3}
 
             # print("FEATURES:")
             # print(features)
@@ -151,11 +143,7 @@ class Worker:
             if not self.save_scores_only:
                 self.output_stream.save_next(current_img, current_of, features, filters, others)
 
-
             step_save_time = time.time() - step_save_time
-
-            # saving a reference used by the next frame to process
-            self.__previous_img = current_img
 
             # updating rho (print only)
             self.__rho = next_rho

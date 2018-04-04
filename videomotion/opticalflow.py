@@ -11,16 +11,23 @@ class OpticalFlow:
         self.frame_gray_scale = None
         self.optical_flow = None
 
-    def compute_flow(self, frame, pass_by=False):
+    def compute_flow(self, frame, pass_by=False, do_not_update_frame_references=False):
+        if self.optical_flow is None:
+            a, b, c = frame.shape
+            self.optical_flow = np.zeros((a, b, 2), frame.dtype)
+        return self.optical_flow
 
         if not pass_by and self.frame is not None:
-            self.prev_frame = self.frame
             prev_frame_gray_scale = self.frame_gray_scale
-            self.frame = frame
-            self.frame_gray_scale = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+            frame_gray_scale = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            if not do_not_update_frame_references:
+                self.prev_frame = self.frame
+                self.frame = frame
+                self.frame_gray_scale = frame_gray_scale
 
             self.optical_flow = cv2.calcOpticalFlowFarneback(prev_frame_gray_scale,
-                                                             self.frame_gray_scale,
+                                                             frame_gray_scale,
                                                              self.optical_flow,
                                                              pyr_scale=0.4,
                                                              levels=5,  # pyramid levels
