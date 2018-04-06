@@ -63,6 +63,7 @@ def main(filename, file_dir, arguments):
     grad = False
     step_adapt = False
     blur = False
+    grad_order2 = False
 
     os.remove("output.txt")
 
@@ -73,7 +74,7 @@ def main(filename, file_dir, arguments):
                         "rep=", "eps1=", "eps2=", "eps3=", "eta=",
                         "step_size=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=",
-                        "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur="]
+                        "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur=", "grad_order2="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
@@ -99,7 +100,8 @@ def main(filename, file_dir, arguments):
                    "weight to give to the entropy term in the moving-average-based estimate",
                    "use the Runge-Kutta method (binary flag) - not implemented yet",
                    "use adaptive step size (gradient-based optimization only)",
-                   "use Gaussian blurring (binary flag)"]
+                   "use Gaussian blurring (binary flag)",
+                   "simulates Gradient-based updates by means of a second-order diff. eq. (binary flag)"]
 
     if arguments is not None and len(arguments) > 0:
         try:
@@ -200,6 +202,8 @@ def main(filename, file_dir, arguments):
                 step_adapt = int(arg) > 0
             elif opt == '--blur':
                 blur = int(arg) > 0
+            elif opt == '--grad_order2':
+                grad_order2 = int(arg) > 0
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
@@ -228,6 +232,9 @@ def main(filename, file_dir, arguments):
 
     # checking option-related errors (given the information acquired from the input stream)
     try:
+        if grad_order2 and grad:
+            raise ValueError('You cannot activate both grad and grad_order2!')
+
         if fps <= 0:
             if step_size < 0.0:
                 fps = input_stream.fps
@@ -308,7 +315,8 @@ def main(filename, file_dir, arguments):
                'rk': rk,
                'grad': grad,
                'step_adapt': step_adapt,
-               'blur': blur}
+               'blur': blur,
+               'grad_order2': grad_order2}
 
     out('[Algorithm Options]')
     out(json.dumps(options, indent=3))

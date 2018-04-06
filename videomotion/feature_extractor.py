@@ -38,6 +38,7 @@ class FeatureExtractor:
         self.root = options['root']
         self.rk = options['rk']
         self.stream = options['stream']
+        self.grad_order2 = options['grad_order2']
 
         # saving other parameters
         self.resume = resume
@@ -52,11 +53,20 @@ class FeatureExtractor:
 
         # in case of gradient-like optimization, disable some terms by zeroing their coefficients
         if self.grad:
-            self.theta = 0.0  # this should >> 1
+            self.theta = 0.0  # this should be >> 1
             self.alpha = 1.0  # this should be 0, but I need this value (1.0) due to implementation issues
             self.beta = 0.0
             self.gamma = 0.0  # this should be 1/(\theta^2)
             self.lambdaM = 0.0
+
+        if self.grad_order2:
+            if self.theta < 1000.0:
+                self.theta = 1000.0 # this should be >> 1
+            self.alpha = 0.0
+            self.beta = 0.0
+            self.gamma = 0.0  # this should be 1/(\theta^2)
+            self.lambdaM = 0.0
+            options['check_params'] = False
 
         self.__check_params(skip_some_checks=not options['check_params'])
 
@@ -153,7 +163,7 @@ class FeatureExtractor:
 
         if not skip_some_checks:
             if self.alpha <= 0.0:
-                raise ValueError("Invalid alpha_night: " + str(self.alpha) + " (it must be > 0)")
+                raise ValueError("Invalid alpha: " + str(self.alpha) + " (it must be > 0)")
 
             if self.beta <= 0.0:
                 raise ValueError("Invalid beta: " + str(self.beta) + " (it must be > 0)")
@@ -412,7 +422,8 @@ class FeatureExtractor:
                     - (self.lambdaM * self.theta) * N_block_1_trans \
                     + self.lambdaM * tf.subtract(O_block, tf.transpose(N_block_dot))
             else:
-                D = self.k * tf.cast(tf.eye(self.ffn), precision)
+                if not self.grad_order2:
+                    D = self.k * tf.cast(tf.eye(self.ffn), precision)
 
             # C
             if self.lambdaM > 0.0:
@@ -421,19 +432,22 @@ class FeatureExtractor:
                     - (self.lambdaM * self.theta) * M_block_1 \
                     - self.lambdaM * (M_block_dot + N_block_1_trans - N_block_1)
             else:
-                C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
-                    tf.cast(tf.eye(self.ffn), precision)
+                if not self.grad_order2:
+                    C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
+                        tf.cast(tf.eye(self.ffn), precision)
 
             # B
             if self.lambdaM > 0.0:
                 B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
                     * tf.cast(tf.eye(self.ffn), precision) - self.lambdaM * M_block_1
             else:
-                B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
-                    * tf.cast(tf.eye(self.ffn), precision)
+                if not self.grad_order2:
+                    B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
+                        * tf.cast(tf.eye(self.ffn), precision)
 
             # A
-            A = 2.0 * self.theta * self.alpha
+            if not self.grad_order2:
+                A = 2.0 * self.theta * self.alpha
 
             # F
             g = 1.0 / self.g_scale
@@ -444,15 +458,27 @@ class FeatureExtractor:
             F = tf.matmul(frame_patches, self.lambdaE * F_ge + self.lambdaC * F_ce, transpose_a=True)
 
             # update terms
-            D_q1 = tf.matmul(D, q1)
-            C_q2 = tf.matmul(C, q2)
-            B_q3 = tf.matmul(B, q3)
-            A_q4 = A * q4
+            if not self.grad_order2:
+                D_q1 = tf.matmul(D, q1)
+                C_q2 = tf.matmul(C, q2)
+                B_q3 = tf.matmul(B, q3)
+                A_q4 = A * q4
 
-            gradient_like1 = -q2
-            gradient_like2 = -q3
-            gradient_like3 = -q4
-            gradient_like4 = (D_q1 + C_q2 + F + B_q3 + A_q4) / self.alpha
+                gradient_like1 = -q2
+                gradient_like2 = -q3
+                gradient_like3 = -q4
+                gradient_like4 = (D_q1 + C_q2 + F + B_q3 + A_q4) / self.alpha
+            else:
+                B = (1.0 / self.theta) * tf.cast(tf.eye(self.ffn), precision)
+                D = self.k * tf.cast(tf.eye(self.ffn), precision)
+
+                D_q1 = tf.matmul(D, q1)
+                B_q2 = tf.matmul(B, q2)
+
+                gradient_like1 = -q2
+                gradient_like2 = D_q1 + F + B_q2
+                gradient_like3 = tf.zeros_like(q1)
+                gradient_like4 = tf.zeros_like(q1)
 
             # step sizes
             with tf.control_dependencies([gradient_like1, gradient_like2, gradient_like3, gradient_like4]):
@@ -472,13 +498,18 @@ class FeatureExtractor:
             # update rules
             with tf.control_dependencies([step_size_up]):
                 if not self.grad:
-                    up_q1 = tf.assign_sub(q1, gradient_like1 * step_size_up)
-                    with tf.control_dependencies([up_q1]):
-                        up_q2 = tf.assign_sub(q2, gradient_like2 * step_size_up + q2 * night)
-                        with tf.control_dependencies([up_q2]):
-                            up_q3 = tf.assign_sub(q3, gradient_like3 * step_size_up + q3 * night)
-                            with tf.control_dependencies([up_q3]):
-                                up_q4 = tf.assign_sub(q4, gradient_like4 * step_size_up + q4 * night)
+                    if not self.grad_order2:
+                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size_up)
+                        with tf.control_dependencies([up_q1]):
+                            up_q2 = tf.assign_sub(q2, gradient_like2 * step_size_up + q2 * night)
+                            with tf.control_dependencies([up_q2]):
+                                up_q3 = tf.assign_sub(q3, gradient_like3 * step_size_up + q3 * night)
+                                with tf.control_dependencies([up_q3]):
+                                    up_q4 = tf.assign_sub(q4, gradient_like4 * step_size_up + q4 * night)
+                    else:
+                        up_q1 = tf.assign_sub(q1, gradient_like1 * step_size_up)
+                        with tf.control_dependencies([up_q1]):
+                            up_q4 = tf.assign_sub(q2, gradient_like2 * step_size_up + q2 * night)
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size_up)
 
