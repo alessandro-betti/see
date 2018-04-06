@@ -22,6 +22,7 @@ class Worker:
         options['stream'] = self.input_stream
         self.input_stream.set_options(w, h, fps, force_gray, frames)
         self.fe = FeatureExtractor(w, h, options, resume)  # here is the TensorFlow based feature extractor!
+        self.blink_steps = []
 
         if resume:
             out("RESUMING...")
@@ -35,7 +36,8 @@ class Worker:
 
         info = {'steps': self.steps,
                 'frame': self.input_stream.get_last_frame_number(),
-                'time': self.input_stream.get_last_frame_time()}
+                'time': self.input_stream.get_last_frame_time(),
+                'blink_steps': self.blink_steps}
 
         f = open(self.fe.save_path + ".info.txt", "w")
         if f is None or not f or f.closed:
@@ -153,6 +155,9 @@ class Worker:
             self.__elapsed_time = time.time() - self.__start_time
             self.steps = self.steps + 1.0
             self.measured_fps = self.steps / self.__elapsed_time
+
+            if is_night == 1.0:
+                self.blink_steps.append(self.steps)
 
             # saving model (every 1000 steps)
             if int(self.steps) % 1000 == 0:

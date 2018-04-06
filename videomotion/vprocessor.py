@@ -326,8 +326,9 @@ def main(filename, file_dir, arguments):
     output_stream.save_option("w", str(w))
     output_stream.save_option("h", str(h))
     output_stream.save_option("fps", str(fps))
-    output_stream.save_option("frames", str(tot_frames))
+    output_stream.save_option("real_video_frames", str(input_stream.frames))
     output_stream.save_option("repetitions", str(repetitions))
+    output_stream.save_option("frames", str(0))   # processed frames
 
     for k, v in options.items():
         output_stream.save_option(k, str(v))

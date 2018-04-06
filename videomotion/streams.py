@@ -59,7 +59,8 @@ class InputStream:
         self.max_frames = max_frames
 
     def set_last_frame_and_time(self, frame, seconds):
-        self.__last_returned_frame_number = frame - 1
+        self.__last_returned_frame_number = frame
+        self.__last_returned_time = seconds * 1000
         if self.is_video():
             self.__video_capture.set(cv2.CAP_PROP_POS_MSEC, seconds * 1000.0)
 
