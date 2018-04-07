@@ -239,7 +239,10 @@ def main(filename, file_dir, arguments):
             if step_size < 0.0:
                 fps = input_stream.fps
             else:
-                fps = 1.0 / step_size
+                if step_size > 0.0:
+                    fps = 1.0 / step_size
+                else:
+                    fps = input_stream.fps
 
         if frames != -1 and input_stream.frames < frames:
             raise ValueError('Video frames: ' + str(input_stream.frames) + ', requested frames: ' + str(frames))

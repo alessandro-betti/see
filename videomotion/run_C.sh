@@ -5,9 +5,9 @@ expid=stability_reality1
 
 videopath=../data/
 videoname=skater.avi
-rep=40
+rep=80
 
-outpath=exp/
+outpath=exp3/
 
 features=5
 filtersize=5
@@ -27,9 +27,9 @@ blur=1
 lambdaC=1000
 lambdaE=2000
 
-eps1=150
-eps2=150
-eps3=150
+eps1=500
+eps2=500
+eps3=500
 
 mkdir ${outpath}/test
 

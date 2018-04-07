@@ -5,9 +5,9 @@ expid=stability_reality1
 
 videopath=../data/
 videoname=skater.avi
-rep=40
+rep=100
 
-outpath=exp/
+outpath=exp2/
 
 features=5
 filtersize=5
@@ -18,7 +18,7 @@ beta=0.000000025
 gamma=0.000375
 k=0.0000000000000000025
 
-step=0.05
+step=0.01
 
 eta=0.001
 rho=0
