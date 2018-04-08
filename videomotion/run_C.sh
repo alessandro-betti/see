@@ -5,7 +5,7 @@ expid=stability_reality1
 
 videopath=../data/
 videoname=skater.avi
-rep=200
+rep=50
 
 outpath=expC/
 
