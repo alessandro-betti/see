@@ -247,7 +247,11 @@ def main(filename, file_dir, arguments):
         if frames != -1 and input_stream.frames < frames:
             raise ValueError('Video frames: ' + str(input_stream.frames) + ', requested frames: ' + str(frames))
         if frames <= 0:
-            frames = input_stream.frames
+            if fps != input_stream.fps:
+                v_len = float(input_stream.frames) / float(input_stream.fps)
+                frames = int(v_len * fps)
+            else:
+                frames = input_stream.frames
 
         if w <= 0:
             w = input_stream.w

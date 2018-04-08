@@ -362,17 +362,17 @@ class FeatureExtractor:
             scaling = obj_comp_values[0] + w
 
             # average on objective function terms
-            obj_comp = (obj_comp_values[1] + obj * w) / scaling
-            ce_comp = (obj_comp_values[2] + ce * w) / scaling
-            minus_ge_comp = (obj_comp_values[3] + minus_ge * w) / scaling
-            mi_comp = (obj_comp_values[4] + mi * w) / scaling
-            mi_real_comp = (obj_comp_values[5] + mi_real * w) / scaling
-            motion_comp = (obj_comp_values[6] + motion * w) / scaling
-            norm_q_comp = (obj_comp_values[7] + norm_q * w) / scaling
-            norm_q_dot_comp = (obj_comp_values[8] + norm_q_dot * w) / scaling
-            norm_q_dot_dot_comp = (obj_comp_values[9] + norm_q_dot_dot * w) / scaling
-            norm_q_mixed_comp = (obj_comp_values[10] + norm_q_mixed * w) / scaling
-            norm_q_dot_dot_dot_comp = (obj_comp_values[11] + norm_q_dot_dot_dot * w) / scaling
+            obj_comp = (obj_comp_values[1] * obj_comp_values[0] + obj * w) / scaling
+            ce_comp = (obj_comp_values[2] * obj_comp_values[0] + ce * w) / scaling
+            minus_ge_comp = (obj_comp_values[3] * obj_comp_values[0] + minus_ge * w) / scaling
+            mi_comp = (obj_comp_values[4] * obj_comp_values[0] + mi * w) / scaling
+            mi_real_comp = (obj_comp_values[5] * obj_comp_values[0] + mi_real * w) / scaling
+            motion_comp = (obj_comp_values[6] * obj_comp_values[0] + motion * w) / scaling
+            norm_q_comp = (obj_comp_values[7] * obj_comp_values[0] + norm_q * w) / scaling
+            norm_q_dot_comp = (obj_comp_values[8] * obj_comp_values[0] + norm_q_dot * w) / scaling
+            norm_q_dot_dot_comp = (obj_comp_values[9] * obj_comp_values[0] + norm_q_dot_dot * w) / scaling
+            norm_q_mixed_comp = (obj_comp_values[10] * obj_comp_values[0] + norm_q_mixed * w) / scaling
+            norm_q_dot_dot_dot_comp = (obj_comp_values[11] * obj_comp_values[0] + norm_q_dot_dot_dot * w) / scaling
 
             obj_values = tf.identity([1.0, obj, ce, minus_ge, mi, mi_real, motion,
                                       norm_q, norm_q_dot, norm_q_dot_dot, norm_q_mixed, norm_q_dot_dot_dot])
