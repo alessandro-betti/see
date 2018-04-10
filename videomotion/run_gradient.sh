@@ -26,7 +26,7 @@ mkdir ${outpath}/test
 
 # ---------------------------------- #
 videoname=skaterc.avi
-rep=200
+rep=65
 eta=0.0005
 rho=0
 
@@ -44,7 +44,7 @@ python vprocessor.py --run ${videopath}${videoname} --out ${outpath}/test/${expn
 
 # ---------------------------------- #
 videoname=skaterc.avi
-rep=200
+rep=65
 eta=0.0005
 rho=0
 
@@ -62,9 +62,9 @@ python vprocessor.py --run ${videopath}${videoname} --out ${outpath}/test/${expn
 
 # ---------------------------------- #
 videoname=skaterc.avi
-rep=200
+rep=65
 eta=0.0005
-rho=1
+rho=0
 
 expid=stability_reality3
 theta=0.0001
@@ -80,9 +80,9 @@ python vprocessor.py --run ${videopath}${videoname} --out ${outpath}/test/${expn
 
 # ---------------------------------- #
 videoname=skaterc.avi
-rep=200
+rep=65
 eta=0.0005
-rho=1
+rho=0
 
 expid=notstability_notreality1
 theta=0.0001

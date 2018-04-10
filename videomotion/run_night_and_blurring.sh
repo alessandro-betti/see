@@ -7,6 +7,7 @@ outpath=expNightBlur/
 
 features=11
 filtersize=11
+blur=1
 
 step=0.04
 
@@ -96,7 +97,7 @@ python vprocessor.py --run ${videopath}${videoname} --out ${outpath}/test/${expn
 videoname=skater.avi
 rep=200
 eta=0.00001
-rho=1
+rho=0
 
 expid=stability_reality3
 theta=0.0001
