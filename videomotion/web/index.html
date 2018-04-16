@@ -8,6 +8,7 @@
 
     <script src="jquery-3.2.1.min.js"></script>
     <script src="jquery-ajax-blob-arraybuffer.js"></script>
+    <!--<script src="FileSaver.js"></script>-->
     <script src="utils.js"></script>
 
     <script language="JavaScript">
@@ -698,6 +699,10 @@
 
                     ctx.putImageData(imgData, 0, 0);
                     _canvas_to_draw_count--;
+
+                    //ctx.canvas.toBlob(function(blob) {
+                    //    saveAs(blob, "filters.png");
+                    //    });
                 },
                 error: function (result) {
                     if (!_error) {
