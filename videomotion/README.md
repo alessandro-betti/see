@@ -1,11 +1,9 @@
 # ECML 2018
  
- The source code is here
+This folder contains the source code used to run the experiments of the paper.
  
- Scripts and data to reproduce experiments in the paper are in "ecml2018" folder.
+Scripts and data to reproduce these experiments are in the [ecml2018](https://github.com/alessandro-betti/see/tree/master/videomotion/ecml2018) folder.
  
- 
-
 # vprocessor
 
 The main file is vprocessor.py that depends on tensorflow and OpenCV.
