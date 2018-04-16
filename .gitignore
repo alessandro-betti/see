@@ -19,7 +19,6 @@
 *.note
 *.pyc
 *.private
-data
 exp
 output.txt
 
@@ -242,6 +241,5 @@ TSWLatexianTemp*
 *.sta
 
 # custom folders (data, experiments)
-./data/*
 ./exp/*
 *.idea
