@@ -1,12 +1,11 @@
 # ECML 2018
- 
 This folder contains the source code used to run the experiments of the paper.
  
 Scripts and data to reproduce these experiments are in the [ecml2018](ecml2018) folder.
  
 # vprocessor
-
-The main file is vprocessor.py that depends on tensorflow and OpenCV.
+The main file is vprocessor.py that depends on [TensorFlow](https://www.tensorflow.org) 
+and [OpenCV](https://opencv.org).
 
 Launching
 
@@ -50,7 +49,7 @@ When the experiment is terminated the web service can be opened using
 
 	python visuserver.py exp/skater
 
-Also a tensor-board visualization can be launched using
+Also a tensor-board visualization can be launched with
 
 	tensorboard --logdir=exp/skater/tensor_board
 
