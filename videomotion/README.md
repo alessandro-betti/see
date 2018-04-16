@@ -2,7 +2,7 @@
  
 This folder contains the source code used to run the experiments of the paper.
  
-Scripts and data to reproduce these experiments are in the [ecml2018](videomotion/ecml2018) folder.
+Scripts and data to reproduce these experiments are in the [ecml2018](ecml2018) folder.
  
 # vprocessor
 
