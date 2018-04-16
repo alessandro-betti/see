@@ -2,6 +2,20 @@
 
 # ---------------------------------- #
 # SHARED OPTIONS
+#
+# Run 'vprocessor.py' without any arguments to see the full option list (and description)
+#
+# Warning: there are some naming conventions that differ from the ones used in the paper and the ones used in the code
+# and in the bash scripts (sh)
+#
+#    paper       code / sh
+#    --------------------------
+#    n           m / features
+#    f           f / filtersize
+#    \mu         alpha / alpha
+#    \nu         beta / beta
+#    h           step_size / step
+#    \phi(0)     rho / rho
 # ---------------------------------- #
 videopath=data/
 videoname=skater.avi

@@ -65,7 +65,7 @@ def main(filename, file_dir, arguments):
     blur = False
     grad_order2 = False
 
-    os.remove("output.txt")
+    # os.remove("output.txt")
 
     # getting options from command line arguments
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
