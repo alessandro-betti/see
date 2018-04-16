@@ -9,7 +9,7 @@ Similar graphs to the ones in the paper can be visualized by
 
     tensorboard --logdir X/tensor_board
 
-where X is one of the previousely mentioned folders.
+where X is one of the previousely mentioned output folders.
 
 The results in Table~1 are taken from the output folder test/X, and they correspond to the 
 the values computed on the last frame.
