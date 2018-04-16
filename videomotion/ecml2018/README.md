@@ -2,9 +2,8 @@
 
 This folder contains the scripts used to reproduce the experiments described in the paper.
 
-Scripts will access the data located in the "data" subfolder.
-
-Each script will create multiple subfolders with the outcomes of the experiments.
+Scripts will access the data located in the "data" subfolder; each script will create multiple 
+subfolders inside the output folder (see the description of [vprocessor](https://github.com/alessandro-betti/see/blob/master/videomotion/README.md#vprocessor)) with the outcomes of the experiments.
 
 Similar graphs to the ones in the paper can be visualized by 
 
