@@ -8,7 +8,7 @@
 
 # vprocessor
 
-The main file is vprocessor.py
+The main file is vprocessor.py that depends on tensorflow and OpenCV.
 
 Launching
 
