@@ -12,10 +12,10 @@ class OpticalFlow:
         self.optical_flow = None
 
     def compute_flow(self, frame, pass_by=False, do_not_update_frame_references=False):
-        if self.optical_flow is None:
-            a, b, c = frame.shape
-            self.optical_flow = np.zeros((a, b, 2), frame.dtype)
-        return self.optical_flow
+        #if self.optical_flow is None:
+        #    a, b, c = frame.shape
+        #    self.optical_flow = np.zeros((a, b, 2), frame.dtype)
+        #return self.optical_flow
 
         if not pass_by and self.frame is not None:
             prev_frame_gray_scale = self.frame_gray_scale
