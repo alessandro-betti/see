@@ -1,8 +1,9 @@
-import numpy as np
 import time
 from feature_extractor import FeatureExtractor
 from utils import out
 import json
+import os
+import numpy as np
 
 
 class Worker:
@@ -15,55 +16,166 @@ class Worker:
         self.__completed_repetitions = 0
         self.__start_time = None
         self.__elapsed_time = None
-        self.__rho = options['rho']
+        self.__layer = 0
+        self.__layers = options['layers']
         self.steps = 0.0
         self.measured_fps = 0.0
         self.save_scores_only = options['save_scores_only']
         options['stream'] = self.input_stream
         self.input_stream.set_options(w, h, fps, force_gray, frames)
-        self.fe = FeatureExtractor(w, h, options, resume)  # here is the TensorFlow based feature extractor!
-        self.blink_steps = []
+        self.options = options
+        self.w = w
+        self.h = h
+        self.layer_steps = 0
+
+        self.fe = []
+        self.log = []
+        self.log.append([])
+
+        self.__rho = []
+        for i in range(0, self.__layers):
+            self.__rho.append(options['rho'][i])
 
         if resume:
             out("RESUMING...")
+            self.fe.append(FeatureExtractor(w, h, options, True))  # here is the TensorFlow based feature extractor!
             self.load(reset_stream_when_resuming)
+        else:
+            self.fe.append(FeatureExtractor(w, h, options, False))  # here is the TensorFlow based feature extractor!
 
     def close(self):
-        self.fe.close()
+        for i in range(0, self.__layer):
+            self.fe[i].close(close_session=False)
+        self.fe[self.__layer].close(close_session=True)
 
     def save(self):
-        self.fe.save()
+        self.fe[self.__layer].save()
 
-        info = {'steps': self.steps,
+        info = {'last_layer': self.__layer,
+                'last_layer_steps': self.layer_steps,
+                'steps': self.steps,
                 'frame': self.input_stream.get_last_frame_number(),
                 'time': self.input_stream.get_last_frame_time(),
-                'blink_steps': self.blink_steps}
+                'last_saved_frame': self.output_stream.get_last_frame()}
 
-        f = open(self.fe.save_path + ".info.txt", "w")
+        f = open(self.fe[0].save_path_base + "/info.txt", "w")
         if f is None or not f or f.closed:
-            raise IOError("Cannot access: " + self.fe.save_path + ".info.txt")
+            raise IOError("Cannot access: " + self.fe[0].save_path_base + "/info.txt")
         json.dump(info, f, indent=4)
         f.close()
 
+        for i in range(0, self.__layer + 1):
+            layer_log = self.fe[0].save_path_base + "/log_layer" + str(i) + ".txt"
+
+            if not os.path.isfile(layer_log):
+                captions = ['steps'] + \
+                           ['unused', 'obj', 'ce', 'minus_ge', 'mi', 'mi_real', 'motion', 'norm_q', 'norm_q_dot',
+                            'norm_q_dot_dot', 'norm_q_mixed', 'norm_q_dot_dot_dot'] + \
+                           ['scaling', 'obj_comp', 'ce', 'minus_ge_comp', 'mi_comp', 'mi_real_comp',
+                            'motion_comp', 'norm_q_comp', 'norm_q_dot_comp', 'norm_q_dot_dot_comp',
+                            'norm_q_mixed_comp', 'norm_q_dot_dot_dot_comp'] + \
+                           ['is_night', 'rho'] + \
+                           ['mi_real_full', 'ce_real_full', 'minus_ge_real_full', 'motion_full', 'motion_acc_full']
+
+                f = open(layer_log, "w")
+                if f is None or not f or f.closed:
+                    raise IOError("Cannot access: " + layer_log)
+                for j in range(0, len(captions)-1):
+                    f.write("%s" % captions[j])
+                    f.write("(" + str(j) + "),")
+                f.write("%s\n" % captions[len(captions)-1])
+                f.write("(" + str(len(captions)-1) + ")")
+                f.close()
+
+            f = open(layer_log, "a")
+            if f is None or not f or f.closed:
+                raise IOError("Cannot access: " + layer_log)
+            for r in range(0, len(self.log[i])):
+                for j in range(0, len(self.log[i][r]) - 1):
+                    f.write("%s," % self.log[i][r][j])
+                f.write("%s\n" % self.log[i][r][len(self.log[i][r]) - 1])
+            f.close()
+
+            self.log[i] = []  # clearing
+
     def load(self, reset_stream=False):
         if not reset_stream:
-            f = open(self.fe.save_path + ".info.txt", "r")
+            f = open(self.fe[0].save_path_base + "/info.txt", "r")
             if f is None or not f or f.closed:
-                raise IOError("Cannot access: " + self.fe.save_path + ".info.txt")
+                raise IOError("Cannot access: " + self.fe[0].save_path_base + "/info.txt")
             info = json.load(f)
             f.close()
 
             self.steps = info['steps']
-            self.fe.load(self.steps)
+            self.__layer = info['last_layer']
+            self.layer_steps = info['last_layer_steps']
 
             self.input_stream.get_next(sample_only=True)  # ensure that the stream is open
             self.input_stream.set_last_frame_and_time(info['frame'], info['time'])
-            self.output_stream.set_last_frame(info['frame'])
+            self.output_stream.set_last_frame(info['last_saved_frame'])
+
+            if self.__layer >= 1:
+                self.fe[0].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
+
+            for i in range(1, self.__layer + 1):
+                prev_layer_session = self.fe[i - 1].sess
+                # prev_layer_output = self.fe[i - 1].process_frame_ops[i - 1][0]
+                prev_layer_output = self.fe[i - 1].logits
+                prev_layer_motion = self.fe[i - 1].motion_01
+                prev_layers_ops = self.fe[i - 1].process_frame_ops
+                prev_layers_summary_ops = self.fe[i - 1].summary_ops
+                self.fe.append(FeatureExtractor(self.w, self.h, self.options, True,
+                                                i,
+                                                prev_layer_session,
+                                                prev_layer_output,
+                                                prev_layer_motion,
+                                                prev_layers_ops,
+                                                prev_layers_summary_ops))
+                if i < self.__layer:
+                    self.fe[i].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
+
+            for i in range(0, self.__layer):
+                self.fe[i].step = self.steps
+                self.log.append([])
+            self.fe[self.__layer].load(self.steps)
+
+            for i in range(0, self.__layer + 1):
+                self.__rho[i] = self.fe[i].get_rho()
+
         else:
             self.steps = 0.0
-            self.fe.load(1)
+
+            for i in range(1, self.__layer + 1):
+                prev_layer_session = self.fe[self.__layer - 1].sess
+                prev_layer_output = self.fe[self.__layer - 1].process_frame_ops[self.__layer - 1][0]
+                prev_layer_motion = self.fe[self.__layer - 1].motion_01
+                prev_layers_ops = self.fe[self.__layer - 1].process_frame_ops
+                self.fe.append(FeatureExtractor(self.w, self.h, self.options, True,
+                                                i,
+                                                prev_layer_session,
+                                                prev_layer_output,
+                                                prev_layer_motion,
+                                                prev_layers_ops))
+
+            frame_0_init_ops = []
+            t_reset_ops = []
+            for i in range(0, self.__layer + 1):
+                frame_0_init_ops.append(self.fe[i].frame_0_init_op)
+                t_reset_ops.append(self.fe[i].t_reset_op)
+            self.fe[self.__layer].frame_0_init_op = frame_0_init_ops
+            self.fe[self.__layer].t_reset_ops = t_reset_ops
+
+            for i in range(0, self.__layer):
+                self.fe[i].step = 1
+            self.fe[self.__layer].load(1)
+
+            for i in range(0, self.__layer + 1):
+                self.__rho[i] = self.fe[i].get_rho()
+
             self.output_stream.create_folders(True)  # clearing folders and recreating them
-            self.fe.activate_tensor_board()
+
+            for i in range(0, self.__layer + 1):
+                self.fe[i].activate_tensor_board()
 
     def run_step(self):
 
@@ -77,7 +189,8 @@ class Worker:
 
             # get the frame to process at the next step and the currently needed motion field
             step_load_time = time.time()
-            current_img, current_of = self.input_stream.get_next(blur_factor=(1.0-self.__rho))
+            current_img, current_of, gaussian_filter, scaling = \
+                self.input_stream.get_next(blur_factor=(1.0-self.__rho[0]))
 
             # handling repetitions
             if current_img is None:
@@ -94,61 +207,92 @@ class Worker:
             step_load_time = time.time() - step_load_time
 
             # extracting features
-            features, filters, obj_values, obj_comp_values, is_night, next_rho, mi_real_full, motion_full = \
-                self.fe.run_step(current_img, current_of)
+            outcomes_by_layer, summaries_by_layer = self.fe[self.__layer].run_step(current_img, current_of,
+                                                                                   gaussian_filter, scaling)
+            features_by_layer = []
+            filters_by_layer = []
+            others_by_layer = []
+            self.layer_steps = self.layer_steps + 1
 
-            # output-info
-            if is_night == 1.0:
-                light = "night"
-            else:
-                light = "day"
+            for i in range(0, self.__layer + 1):
+                self.fe[i].add_to_tensor_board(summaries_by_layer[i])
 
-            out("\t[status=" + light + ", rho=" + str(self.__rho) + ", action_cur=" + str(obj_values[1])
-                + ", mi_real_full=" + str(mi_real_full) + ", motion_full=" + str(motion_full)
-                + ",\n\t mi_real=" + str(obj_values[5]) + ", mi=" + str(obj_values[4])
-                + ", ce=" + str(obj_values[2])
-                + ", minus_ge=" + str(obj_values[3])
-                + ", motion=" + str(obj_values[6])
-                + ",\n\t norm_q=" + str(obj_values[7]) + ", q'q''=" + str(obj_values[10])
-                + ", norm_q'=" + str(obj_values[8]) + "/" + "{0:.2f}".format(self.fe.eps1)
-                + ", norm_q''=" + str(obj_values[9]) + "/" + "{0:.2f}".format(self.fe.eps2)
-                + ", norm_q'''=" + str(obj_values[11]) + "/" + "{0:.2f}".format(self.fe.eps3) + "]")
+                if i == self.__layer:
+                    features, filters, obj_values, obj_comp_values, is_night_next_rho, full_values, \
+                        unused_forward, unused_backward = outcomes_by_layer[i]
+                else:
+                    self.fe[i].step = self.fe[i].step + 1  # the frozen layers need to be manually handled...
+                    features, filters, obj_values, obj_comp_values, is_night_next_rho, full_values, \
+                        unused_forward = outcomes_by_layer[i]
 
-            others = {'status': light, 'rho': float(self.__rho), 'action_cur': float(obj_values[1]),
-                      'mi_real_full': float(mi_real_full), 'motion_full': float(motion_full),
-                      'mi_real': float(obj_values[5]), 'mi': float(obj_values[4]),
-                      'ce': float(obj_values[2]),
-                      'minus_ge': float(obj_values[3]),
-                      'motion': float(obj_values[6]), 'norm_q': float(obj_values[7]),
-                      'norm_q_mixed': float(obj_values[10]),
-                      'norm_q_dot': float(obj_values[8]),
-                      'norm_q_dot_dot': float(obj_values[9]),
-                      'norm_q_dot_dot_dot': float(obj_values[11]),
-                      'eps1': self.fe.eps1,
-                      'eps2': self.fe.eps2,
-                      'eps3': self.fe.eps3}
+                # output-info
+                if is_night_next_rho[0] == 1.0:
+                    light = "night"
+                else:
+                    light = "day"
 
-            # print("FEATURES:")
-            # print(features)
+                out("\t[layer=" + str(i) + ", status=" + light + ", rho=" + str(self.__rho[i])
+                    + ", action_cur=" + str(obj_values[1])
+                    + ", mi_real_full=" + str(full_values[0]) + ", motion_full=" + str(full_values[3])
+                    + ", motion_acc_full=" + str(full_values[4])
+                    + ",\n\t mi_real=" + str(obj_values[5]) + ", mi=" + str(obj_values[4])
+                    + ", ce=" + str(obj_values[2])
+                    + ", minus_ge=" + str(obj_values[3])
+                    + ", motion=" + str(obj_values[6])
+                    + ",\n\t norm_q=" + str(obj_values[7]) + ", q'q''=" + str(obj_values[10])
+                    + ", norm_q'=" + str(obj_values[8]) + "/" + "{0:.2f}".format(self.fe[i].eps1)
+                    + ", norm_q''=" + str(obj_values[9]) + "/" + "{0:.2f}".format(self.fe[i].eps2)
+                    + ", norm_q'''=" + str(obj_values[11]) + "/" + "{0:.2f}".format(self.fe[i].eps3) + "]")
 
-            # print("FILTERS:")
-            # print(filters)
+                others = {'layer': int(i), 'last_layer': self.__layer, 'status': light, 'rho': float(self.__rho[i]),
+                          'action_cur': float(obj_values[1]),
+                          'mi_real_full': float(full_values[0]), 'ce_real_full': float(full_values[1]),
+                          'minus_ge_real_full': float(full_values[2]), 'motion_full': float(full_values[3]),
+                          'motion_acc_full': float(full_values[4]),
+                          'mi_real': float(obj_values[5]), 'mi': float(obj_values[4]),
+                          'ce': float(obj_values[2]),
+                          'minus_ge': float(obj_values[3]),
+                          'motion': float(obj_values[6]), 'norm_q': float(obj_values[7]),
+                          'norm_q_mixed': float(obj_values[10]),
+                          'norm_q_dot': float(obj_values[8]),
+                          'norm_q_dot_dot': float(obj_values[9]),
+                          'norm_q_dot_dot_dot': float(obj_values[11]),
+                          'eps1': self.fe[i].eps1,
+                          'eps2': self.fe[i].eps2,
+                          'eps3': self.fe[i].eps3}
 
-            # checking errors
-            if not np.isfinite(filters).any() or np.isnan(filters).any():
-                raise ValueError("Filters contain NaNs or Infinite!")
-            if not np.isfinite(features).any() or np.isnan(features).any():
-                raise ValueError("Feature maps contain NaNs or Infinite!")
+                self.log[i].append(np.append(np.append(np.append(np.append([self.steps + 1],
+                                                                           obj_values),
+                                                                 obj_comp_values),
+                                                       is_night_next_rho),
+                                             full_values))
+
+                features_by_layer.append(features)
+                filters_by_layer.append(filters)
+                others_by_layer.append(others)
+
+                # updating rho (print only)
+                self.__rho[i] = is_night_next_rho[1]
+
+                # print("FEATURES:")
+                # print(features)
+
+                # print("FILTERS:")
+                # print(filters)
+
+                # checking errors
+                # if not np.isfinite(filters).any() or np.isnan(filters).any():
+                #    raise ValueError("Filters contain NaNs or Infinite!")
+                # if not np.isfinite(features).any() or np.isnan(features).any():
+                #    raise ValueError("Feature maps contain NaNs or Infinite!")
 
             # save output
             step_save_time = time.time()
             if not self.save_scores_only:
-                self.output_stream.save_next(current_img, current_of, features, filters, others)
+                self.output_stream.save_next(current_img, current_of,
+                                             features_by_layer, filters_by_layer, others_by_layer)
 
             step_save_time = time.time() - step_save_time
-
-            # updating rho (print only)
-            self.__rho = next_rho
 
             # stats
             step_time = time.time() - step_time
@@ -156,12 +300,44 @@ class Worker:
             self.steps = self.steps + 1.0
             self.measured_fps = self.steps / self.__elapsed_time
 
-            if is_night == 1.0:
-                self.blink_steps.append(self.steps)
-
             # saving model (every 1000 steps)
             if int(self.steps) % 1000 == 0:
                 self.save()
+
+            # next layer activation
+            norm_q_dot = obj_values[8]
+            norm_q_dot_dot = obj_values[9]
+            norm_q_dot_dot_dot = obj_values[11]
+
+            if self.layer_steps >= self.fe[self.__layer].c_frames_min and \
+                    (self.layer_steps >= self.fe[self.__layer].c_frames or
+                    (norm_q_dot < self.fe[self.__layer].c_eps1
+                     and norm_q_dot_dot < self.fe[self.__layer].c_eps2
+                     and norm_q_dot_dot_dot < self.fe[self.__layer].c_eps3)):
+
+                if (self.__layer + 1) < self.__layers:
+                    out("Activating a new layer...")
+                    self.layer_steps = 0
+                    self.save()
+                    self.__layer = self.__layer + 1
+                    self.log.append([])
+
+                    prev_layer_session = self.fe[self.__layer - 1].sess
+                    # prev_layer_output = self.fe[self.__layer - 1].process_frame_ops[self.__layer - 1][0]
+                    prev_layer_output = self.fe[self.__layer - 1].logits
+                    prev_layer_motion = self.fe[self.__layer - 1].motion_01
+                    prev_layers_ops = self.fe[self.__layer - 1].process_frame_ops
+                    prev_layers_ops[-1].pop()  # freezing: the last operation is "backward and update"
+                    prev_layers_summary_ops = self.fe[self.__layer - 1].summary_ops
+                    self.fe.append(FeatureExtractor(self.w, self.h, self.options, False,
+                                                    self.__layer,
+                                                    prev_layer_session,
+                                                    prev_layer_output,
+                                                    prev_layer_motion,
+                                                    prev_layers_ops,
+                                                    prev_layers_summary_ops))
+                    self.fe[self.__layer].step = self.steps
+
         else:
             status = False
             step_load_time = time.time() - step_load_time

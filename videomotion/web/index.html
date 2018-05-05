@@ -24,6 +24,7 @@
         var _features = 0;
         var _visu_changed = false;
         var _feature_range_text = '';
+        var _layer_id_text = '';
         var _canvas_to_draw_count = 0;
         var _w = 0;
         var _h = 0;
@@ -79,6 +80,7 @@
             var showFilters = $('#checkbox_filters').is(':checked');
             var normalizeFeatures = $('#checkbox_features_normalization').is(':checked');
             var motionMap = $('#checkbox_motion_map').is(':checked');
+            var layer = parseInt($('#text_layer_id').val());
 
             var ret = {
                 fps: fps,
@@ -89,7 +91,8 @@
                 showFeatures: showFeatures,
                 showFilters: showFilters,
                 normalizeFeatures: normalizeFeatures,
-                motionMap: motionMap
+                motionMap: motionMap,
+                layer: layer
             };
 
             return ret;
@@ -106,7 +109,7 @@
 
             if (action == 'refresh') {
                 if (params.showVideo) {
-                    get_and_draw_frame(params.frame);
+                    get_and_draw_frame(params.frame, params.layer);
                 }
                 if (params.showMotion) {
                     if (params.motionMap) {
@@ -117,9 +120,9 @@
                 }
                 if (params.showFilters) {
                     if (params.normalizeFeatures) {
-                        get_and_draw_filters(params.frame, true)
+                        get_and_draw_filters(params.frame, true, params.layer)
                     } else {
-                        get_and_draw_filters(params.frame, false)
+                        get_and_draw_filters(params.frame, false, params.layer)
                     }
                 }
                 if (params.showFeatures) {
@@ -127,9 +130,9 @@
 
                     if (range_array.length == 2 && range_array[1].trim().length > 0) {
                         if (params.normalizeFeatures) {
-                            get_and_draw_features(params.frame, range_array, true)
+                            get_and_draw_features(params.frame, range_array, true, params.layer)
                         } else {
-                            get_and_draw_features(params.frame, range_array, false)
+                            get_and_draw_features(params.frame, range_array, false, params.layer)
                         }
                     }
                 }
@@ -175,12 +178,17 @@
                 url: "/options",
                 success: function (byte_str) {
                     var options = JSON.parse(byte_str);
+                    var layer = $('#text_layer_id').val();
+
+                    console.log(options)
+                    console.log(layer)
 
                     $('#text_frames').val(options["frames"]);
+                    $('#text_layers').val(options["layers"]-1);
                     $('#text_fps').val(options["fps"]);
                     $('#text_resolution').val(options["resolution"]);
-                    $('#text_features_range').val("1-" + options["m"]);
-                    _features = options["features"];
+                    $('#text_features_range').val("1-" + options["m"][layer]);
+                    _features = options["m"][layer];
                     _w = options["w"];
                     _h = options["h"];
                 },
@@ -194,13 +202,14 @@
             });
         };
 
-        function get_others(frame) {
+        function get_others(frame, layer) {
             console.log("Requested: others")
             $.ajax({
                 type: "GET",
                 url: "/others",
                 data: {
-                    frame: frame
+                    frame: frame,
+                    layer: layer
                 },
                 success: function (byte_str) {
                     var others = JSON.parse(byte_str);
@@ -209,6 +218,16 @@
                     else
                         _night = 1.0
                     document.getElementById("json").innerHTML = JSON.stringify(others, undefined, 2);
+                    var lastread = parseInt(others['last_layer']);
+                    var curshown = parseInt($('#text_active_layers').val().trim());
+
+                    if (lastread != curshown) {
+                        $('#text_active_layers').css({ 'color': 'red' });
+                    } else {
+                        $('#text_active_layers').css({ 'color': 'black' });
+                    }
+
+                    $('#text_active_layers').val(others['last_layer']);
                 },
                 error: function (result) {
                     if (!_error) {
@@ -220,9 +239,9 @@
             });
         };
 
-        function get_and_draw_frame(frame) {
+        function get_and_draw_frame(frame, layer) {
             console.log("Requested: frame");
-            get_others(frame);
+            get_others(frame, layer);
             _canvas_to_draw_count++;
             var ctx = get_canvas("Video", _w, _h); // ensure this is immediately returned (to gain a top row position)
             $.ajax({
@@ -413,7 +432,7 @@
             });
         };
 
-        function get_and_draw_features(frame, range, normalize) {
+        function get_and_draw_features(frame, range, normalize, layer) {
             console.log("Requested: features");
             _canvas_to_draw_count++;
             $.ajax({
@@ -421,7 +440,8 @@
                 url: "/features",
                 dataType: "arraybuffer",
                 data: {
-                    frame: frame
+                    frame: frame,
+                    layer: layer
                 },
                 success: function (array_buffer) {
                     var numPyArray = getDataFromNumPyArray(array_buffer);
@@ -502,7 +522,7 @@
             });
         };
 
-        function get_and_draw_filters(frame, normalize) {
+        function get_and_draw_filters(frame, normalize, layer) {
             console.log("Requested: filters");
             _canvas_to_draw_count++;
             $.ajax({
@@ -510,7 +530,8 @@
                 url: "/filters",
                 dataType: "arraybuffer",
                 data: {
-                    frame: frame
+                    frame: frame,
+                    layer: layer
                 },
                 success: function (array_buffer) {
                     var numPyArray = getDataFromNumPyArray(array_buffer);
@@ -734,6 +755,29 @@
                 }
             });
 
+            $('#text_layer_id').bind('keyup', function () {
+                if ($('#text_layer_id').val().trim().length > 0) {
+                    var value = Number($('#text_layer_id').val());
+                    if (isNaN(value) || value != Math.floor(value)) {
+                        $('#text_layer_id').val("0");
+                    } else {
+                        if (value < 0) {
+                            $('#text_layer_id').val("0");
+                        } else {
+                            if (value >= $('#text_layers').val()) {
+                                $('#text_layer_id').val($('#text_layers').val());
+                            }
+                        }
+                    }
+
+                    if ($('#text_layer_id').val() != _layer_id_text) {
+                        _visu_changed = true;
+                    }
+
+                    _layer_id_text = $('#text_layer_id').val();
+                }
+            });
+
             $('#text_fps').bind('keyup', function () {
                 if ($('#text_fps').val().trim().length > 0) {
                     var value = Number($('#text_fps').val());
@@ -811,6 +855,8 @@
     <input type="checkbox" id="checkbox_motion" checked onclick="{ _visu_changed = true; }">Motion
     <input type="checkbox" id="checkbox_features" checked onclick="{ _visu_changed = true; }">Features
     <input type="checkbox" id="checkbox_filters" checked onclick="{ _visu_changed = true; }">Filters
+    <br/>
+    Layer ID (zero based): <input type="text" id="text_layer_id" value="0"/>/<input type="text" id="text_layers" readonly/> Last Active Layer ID: <input type="text" id="text_active_layers" readonly/>
     <br/>
     Features: <input type="text" id="text_features_range" value="1-1"/>
     <input type="checkbox" id="checkbox_features_normalization" onclick="{ _visu_changed = true; }">Min-Max Features/Filters

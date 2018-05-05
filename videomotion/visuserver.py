@@ -6,6 +6,7 @@ from streams import InputStream
 import sys
 import socket
 from utils import out
+import numpy as np
 
 
 class VisualizationServer:
@@ -101,16 +102,20 @@ def make_handler_class(html_root="web", data_root="output"):
         def __get_data(self, request, args):
             data = None
             frame = None
+            layer = None
             is_gzipped = None
 
-            if args is not None and args['frame'] is not None:
-                if args['frame'][0] is not None:
-                    try:
-                        frame = int(args['frame'][0])
-                    except ValueError:
-                        frame = 0
-                    if frame <= 0:
-                        frame = None
+            if args is not None:
+                if 'frame' in args and args['frame'] is not None:
+                    if args['frame'][0] is not None:
+                        try:
+                            frame = int(args['frame'][0])
+                        except ValueError:
+                            frame = 0
+                        if frame <= 0:
+                            frame = None
+                if 'layer' in args and args['layer'] is not None:
+                    layer = str(args['layer'][0])
 
             # requesting frames
             if request == "/video":
@@ -134,7 +139,7 @@ def make_handler_class(html_root="web", data_root="output"):
             elif request == "/features":
                 if frame is not None:
                     file_name = Handler.__frame_to_path(frame)
-                    file_name = self.data_root + os.sep + "features" + os.sep + file_name + ".feat"
+                    file_name = self.data_root + os.sep + "features" + os.sep + file_name + ".feat_" + layer
                     with open(file_name, "rb") as f:
                         data = f.read()
                     is_gzipped = True
@@ -143,7 +148,7 @@ def make_handler_class(html_root="web", data_root="output"):
             elif request == "/filters":
                 if frame is not None:
                     file_name = Handler.__frame_to_path(frame)
-                    file_name = self.data_root + os.sep + "filters" + os.sep + file_name + ".fil"
+                    file_name = self.data_root + os.sep + "filters" + os.sep + file_name + ".fil_" + layer
                     with open(file_name, "rb") as f:
                         data = f.read()
                     is_gzipped = True
@@ -160,7 +165,7 @@ def make_handler_class(html_root="web", data_root="output"):
             elif request == "/others":
                 if frame is not None:
                     file_name = Handler.__frame_to_path(frame)
-                    file_name = self.data_root + os.sep + "others" + os.sep + file_name + ".txt"
+                    file_name = self.data_root + os.sep + "others" + os.sep + file_name + "_" + layer + ".txt"
                     with open(file_name, "r") as f:
                         data = f.read()
                     data = str.encode(data)

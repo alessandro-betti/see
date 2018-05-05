@@ -8,6 +8,7 @@ from visuserver import VisualizationServer
 import json
 import signal
 from functools import partial
+from collections import OrderedDict
 
 
 def main(filename, file_dir, arguments):
@@ -34,36 +35,42 @@ def main(filename, file_dir, arguments):
     force_gray = False
     visualization_port = 0
 
-    features = 4  # number of features
-    filter_size = 3  # "edge" size of a filter, i.e., the area is filter_size x filter_size
-    k = 0.5   # weight of the norm of "q"
-    alpha = 0.5  # weight of the norm of the second derivative q^(2)
-    beta = 1.0   # weight of the norm of the first derivative q^(1)
-    gamma = 2.0   # weight of the mixed-product first-second derivatives q^(2)q^(1)
-    theta = 1.0   # exp(theta x t)
-    lambdaM = 1.0  # motion constraint
-    lambdaC = 2.0  # conditional entropy
-    lambdaE = 1.0  # entropy
-    eps1 = 100000.0  # bound on the norm of the first derivative q^(1)
-    eps2 = 100000.0  # bound on the norm of the second derivative q^(2)
-    eps3 = 100000.0  # bound on the norm of the third derivative q^(3)
-    eta = 0.25
-    rho = 0.0
-    init_q = 0.1
-    gew = 1.0  # weight to the last measurement of the entropy term (historical moving average)
-    rk = 0
-    step_size = -1
+    layers = 1  # number of layers
+    c_eps1 = {0: 10}  # layer-convergence threshold on the norm of the first derivative of q (squared norm)
+    c_eps2 = {0: 10}  # layer-convergence threshold on the norm of the second derivative of q (squared norm)
+    c_eps3 = {0: 10}  # layer-convergence threshold on the norm of the third derivative of q (squared norm)
+    c_frames = {0: 10000}  # layer-convergence threshold on the number of processed frames
+    c_frames_min = {0: 100}  # minimum number of frames processed by each layer
+    features = {0: 4}  # number of features
+    filter_size = {0: 3}  # "edge" size of a filter, i.e., the area is filter_size x filter_size
+    k = {0: 0.5}  # weight of the norm of "q"
+    alpha = {0: 0.5}  # weight of the norm of the second derivative q^(2)
+    beta = {0: 1.0}  # weight of the norm of the first derivative q^(1)
+    gamma = {0: 2.0}  # weight of the mixed-product first-second derivatives q^(2)q^(1)
+    theta = {0: 1.0}  # exp(theta x t)
+    lambdaM = {0: 1.0}  # motion constraint
+    lambdaC = {0: 2.0}  # conditional entropy
+    lambdaE = {0: 1.0}  # entropy
+    eps1 = {0: 100000.0}  # bound on the norm of the first derivative q^(1)
+    eps2 = {0: 100000.0}  # bound on the norm of the second derivative q^(2)
+    eps3 = {0: 100000.0}  # bound on the norm of the third derivative q^(3)
+    eta = {0: 0.25}
+    rho = {0: 0.0}
+    init_q = {0: 0.1}
+    gew = {0: 1.0}  # weight to the last measurement of the entropy term (historical moving average)
+    day_only = {0: False}
+    init_fixed = {0: False}
 
+    blur = True
+    step_size = -1
     resume = 0
     all_black = False
-    init_fixed = False
-    day_only = False
     save_scores_only = False
     check_params = True
     grad = False
     step_adapt = False
-    blur = False
     grad_order2 = False
+    rk = 0
 
     # os.remove("output.txt")
 
@@ -74,7 +81,8 @@ def main(filename, file_dir, arguments):
                         "rep=", "eps1=", "eps2=", "eps3=", "eta=",
                         "step_size=", "all_black=", "init_fixed=", "check_params=",
                         "grad=", "rho=", "day_only=",
-                        "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur=", "grad_order2="]
+                        "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur=", "grad_order2=",
+                        "layers=", "c_eps1=", "c_eps2=", "c_eps3=", "c_frames=", "c_frames_min="]
     description = ["port of the visualization service", "resume an experiment (binary flag)",
                    "none", "none", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
@@ -101,9 +109,33 @@ def main(filename, file_dir, arguments):
                    "use the Runge-Kutta method (binary flag) - not implemented yet",
                    "use adaptive step size (gradient-based optimization only)",
                    "use Gaussian blurring (binary flag)",
-                   "simulates Gradient-based updates by means of a second-order diff. eq. (binary flag)"]
+                   "simulates Gradient-based updates by means of a second-order diff. eq. (binary flag)",
+                   "number of layers",
+                   "layer-convergence threshold on the norm of the first derivative of q (squared norm)",
+                   "layer-convergence threshold on the norm of the second derivative of q (squared norm)",
+                   "layer-convergence threshold on the norm of the third derivative of q (squared norm)",
+                   "layer-convergence threshold on the number of processed frames",
+                   "minimum number of frames processed by each layer"]
 
     if arguments is not None and len(arguments) > 0:
+
+        # finding arguments that are about layer-related options
+        i = 0
+        layer_opts = []
+        for a in arguments:
+            layer_opt = -1
+            if a[0] == '-':
+                u = 0
+                while a[-(u + 1)].isdigit():
+                    u = u + 1
+                if u > 0 and a[-(u + 1)] == '_':
+                    layer_opt = int(a[-(u):])
+                    arguments[i] = a[:-(u + 1)]
+                layer_opts.append(layer_opt)
+            i = i + 1
+
+        # parsing options
+        print(arguments)
         try:
             opts, args = getopt.getopt(arguments, "", accepted_options)
         except getopt.GetoptError:
@@ -114,6 +146,9 @@ def main(filename, file_dir, arguments):
         sys.exit(2)
 
     try:
+        i = 0
+
+        # handling the validated options (putting back the layer-related info)
         for opt, arg in opts:
             if opt == '--run':
                 if os.path.isdir(arg):
@@ -135,78 +170,205 @@ def main(filename, file_dir, arguments):
                 wh = arg.split('x')
                 w = int(wh[0])
                 h = int(wh[1])
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--gray':
                 if int(arg) > 0:
                     force_gray = True
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--fps':
                 fps = float(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--frames':
                 frames = int(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--rep':
                 repetitions = int(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--m':
-                features = int(arg)
+                features[max(layer_opts[i],0)] = int(arg)
             elif opt == '--f':
-                filter_size = int(arg)
+                filter_size[max(layer_opts[i],0)] = int(arg)
             elif opt == '--init_q':
-                init_q = float(arg)
+                init_q[max(layer_opts[i],0)] = float(arg)
             elif opt == '--theta':
-                theta = float(arg)
+                theta[max(layer_opts[i],0)] = float(arg)
             elif opt == '--alpha':
-                alpha = float(arg)
+                alpha[max(layer_opts[i],0)] = float(arg)
             elif opt == '--beta':
-                beta = float(arg)
+                beta[max(layer_opts[i],0)] = float(arg)
             elif opt == '--eps1':
-                eps1 = float(arg)
+                eps1[max(layer_opts[i],0)] = float(arg)
             elif opt == '--eps2':
-                eps2 = float(arg)
+                eps2[max(layer_opts[i],0)] = float(arg)
             elif opt == '--eps3':
-                eps3 = float(arg)
+                eps3[max(layer_opts[i],0)] = float(arg)
             elif opt == '--eta':
-                eta = float(arg)
+                eta[max(layer_opts[i],0)] = float(arg)
             elif opt == '--k':
-                k = float(arg)
+                k[max(layer_opts[i],0)] = float(arg)
             elif opt == '--gamma':
-                gamma = float(arg)
+                gamma[max(layer_opts[i],0)] = float(arg)
             elif opt == '--lambdaC':
-                lambdaC = float(arg)
+                lambdaC[max(layer_opts[i],0)] = float(arg)
             elif opt == '--lambdaM':
-                lambdaM = float(arg)
+                lambdaM[max(layer_opts[i],0)] = float(arg)
             elif opt == '--lambdaE':
-                lambdaE = float(arg)
+                lambdaE[max(layer_opts[i],0)] = float(arg)
             elif opt == '--step_size':
                 step_size = float(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--resume':
                 resume = int(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--port':
                 visualization_port = int(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--all_black':
                 all_black = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--init_fixed':
-                init_fixed = int(arg) > 0
+                init_fixed[max(layer_opts[i],0)] = int(arg) > 0
             elif opt == '--check_params':
                 check_params = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--rho':
-                rho = float(arg)
+                rho[max(layer_opts[i],0)] = float(arg)
             elif opt == '--grad':
                 grad = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--day_only':
-                day_only = int(arg) > 0
+                day_only[max(layer_opts[i],0)] = int(arg) > 0
             elif opt == '--save_scores_only':
                 save_scores_only = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--gew':
-                gew = float(arg)
+                gew[max(layer_opts[i],0)] = float(arg)
             elif opt == '--rk':
                 rk = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--step_adapt':
                 step_adapt = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--blur':
                 blur = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
             elif opt == '--grad_order2':
                 grad_order2 = int(arg) > 0
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
+            elif opt == '--c_eps1':
+                c_eps1[max(layer_opts[i],0)] = float(arg)
+            elif opt == '--c_eps2':
+                c_eps2[max(layer_opts[i],0)] = float(arg)
+            elif opt == '--c_eps3':
+                c_eps3[max(layer_opts[i],0)] = float(arg)
+            elif opt == '--c_frames':
+                c_frames[max(layer_opts[i],0)] = int(arg)
+            elif opt == '--c_frames_min':
+                c_frames_min[max(layer_opts[i],0)] = int(arg)
+            elif opt == '--layers':
+                layers = int(arg)
+                if layer_opts[i] >= 0:
+                    raise ValueError("This option cannot be defined layer-wise: " + opt)
+            i = i + 1
     except (ValueError, IOError) as e:
         err(e)
         sys.exit(1)
+
+    # default options are the ones from the first layer
+    n = {0: -1}
+    for i in range(0,layers):
+        if i not in c_eps1:
+            c_eps1[i] = c_eps1[0]
+        if i not in c_eps2:
+            c_eps2[i] = c_eps2[0]
+        if i not in c_eps3:
+            c_eps3[i] = c_eps3[0]
+        if i not in c_frames:
+            c_frames[i] = c_frames[0]
+        if i not in c_frames_min:
+            c_frames_min[i] = c_frames_min[0]
+        if i not in features:
+            features[i] = features[0]
+        if i not in filter_size:
+            filter_size[i] = filter_size[0]
+        if i not in k:
+            k[i] = k[0]
+        if i not in alpha:
+            alpha[i] = alpha[0]
+        if i not in beta:
+            beta[i] = beta[0]
+        if i not in gamma:
+            gamma[i] = gamma[0]
+        if i not in theta:
+            theta[i] = theta[0]
+        if i not in lambdaM:
+            lambdaM[i] = lambdaM[0]
+        if i not in lambdaC:
+            lambdaC[i] = lambdaC[0]
+        if i not in lambdaE:
+            lambdaE[i] = lambdaE[0]
+        if i not in eps1:
+            eps1[i] = eps1[0]
+        if i not in eps2:
+            eps2[i] = eps2[0]
+        if i not in eps3:
+            eps3[i] = eps3[0]
+        if i not in eta:
+            eta[i] = eta[0]
+        if i not in rho:
+            rho[i] = rho[0]
+        if i not in init_q:
+            init_q[i] = init_q[0]
+        if i not in gew:
+            gew[i] = gew[0]
+        if i not in day_only:
+            day_only[i] = day_only[0]
+        if i not in init_fixed:
+            init_fixed[i] = init_fixed[0]
+        if i > 0:
+            n[i] = features[i-1]
+
+    # sorting by layer index
+    c_eps1 = OrderedDict(sorted(c_eps1.items()))
+    c_eps2 = OrderedDict(sorted(c_eps2.items()))
+    c_eps3 = OrderedDict(sorted(c_eps3.items()))
+    c_frames = OrderedDict(sorted(c_frames.items()))
+    c_frames_min = OrderedDict(sorted(c_frames_min.items()))
+    features = OrderedDict(sorted(features.items()))
+    filter_size = OrderedDict(sorted(filter_size.items()))
+    k = OrderedDict(sorted(k.items()))
+    alpha = OrderedDict(sorted(alpha.items()))
+    beta = OrderedDict(sorted(beta.items()))
+    gamma = OrderedDict(sorted(gamma.items()))
+    theta = OrderedDict(sorted(theta.items()))
+    lambdaM = OrderedDict(sorted(lambdaM.items()))
+    lambdaC = OrderedDict(sorted(lambdaC.items()))
+    lambdaE = OrderedDict(sorted(lambdaE.items()))
+    eps1 = OrderedDict(sorted(eps1.items()))
+    eps2 = OrderedDict(sorted(eps2.items()))
+    eps3 = OrderedDict(sorted(eps3.items()))
+    eta = OrderedDict(sorted(eta.items()))
+    rho = OrderedDict(sorted(rho.items()))
+    init_q = OrderedDict(sorted(init_q.items()))
+    gew = OrderedDict(sorted(gew.items()))
+    day_only = OrderedDict(sorted(day_only.items()))
+    init_fixed = OrderedDict(sorted(init_fixed.items()))
 
     if len(output_folder) == 0:
         usage(filename, accepted_options, description)
@@ -294,9 +456,10 @@ def main(filename, file_dir, arguments):
         out()
 
     # setting up algorithm options
+    n[0] = c
     options = {'root': os.path.abspath(output_folder),
                'm': features,
-               'n': c,
+               'n': n,
                'f': filter_size,
                'init_q': init_q,
                'theta': theta,
@@ -323,7 +486,13 @@ def main(filename, file_dir, arguments):
                'grad': grad,
                'step_adapt': step_adapt,
                'blur': blur,
-               'grad_order2': grad_order2}
+               'grad_order2': grad_order2,
+               'layers': layers,
+               'c_eps1': c_eps1,
+               'c_eps2': c_eps2,
+               'c_eps3': c_eps3,
+               'c_frames': c_frames,
+               'c_frames_min': c_frames_min}
 
     out('[Algorithm Options]')
     out(json.dumps(options, indent=3))
@@ -335,10 +504,10 @@ def main(filename, file_dir, arguments):
     output_stream.save_option("fps", str(fps))
     output_stream.save_option("real_video_frames", str(input_stream.frames))
     output_stream.save_option("repetitions", str(repetitions))
-    output_stream.save_option("frames", str(0))   # processed frames
+    output_stream.save_option("frames", str(tot_frames))   # processed frames
 
     for k, v in options.items():
-        output_stream.save_option(k, str(v))
+        output_stream.save_option(k, v)
 
     if not save_scores_only:
         output_stream.save_option("ip", str(visualization_server.ip))

@@ -78,7 +78,7 @@ class InputStream:
 
         # check
         if 0 < self.max_frames <= self.__last_returned_frame_number:
-            return None, None
+            return None, None, None, None
 
         # opening stream (if not already opened)
         if self.is_video():
@@ -133,7 +133,7 @@ class InputStream:
                     img = None  # reached the end of video
 
             if img is None:
-                return None, None
+                return None, None, None, None
 
         elif self.is_folder():
             n_folder = int(f / self.__files_per_folder) + 1
@@ -145,7 +145,7 @@ class InputStream:
             if os.path.exists(self.input + os.sep + "frames" + os.sep + folder_name + os.sep + file_name + ".png"):
                 img = cv2.imread(self.input + os.sep + "frames" + os.sep + folder_name + os.sep + file_name + ".png")
             else:
-                return None, None
+                return None, None, None, None
 
         # rescaling
         if (self.__req_w > 0 and self.__req_h > 0) and (self.__req_w != self.w or self.__req_h != self.h):
@@ -160,12 +160,18 @@ class InputStream:
             if kernel_size % 2 == 0:
                 kernel_size = kernel_size + 1
             if self.__blur:
-                img = ((1.0 - blur_factor) * cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)).astype(np.uint8)
+                scaling = 1.0 - blur_factor
+                gaussian_filter = cv2.getGaussianKernel(kernel_size, 0)  # 1D
+                img = (scaling * cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)).astype(np.uint8)
             else:
-                img = ((1.0 - blur_factor) * img).astype(np.uint8)
+                scaling = 1.0 - blur_factor
+                gaussian_filter = np.array([1.0])
+                img = (scaling * img).astype(np.uint8)
         else:
             if blur_factor < 0.0:
                 raise ValueError("Invalid blur factor (it must be in [0,1]): " + str(blur_factor))
+            scaling = 1.0
+            gaussian_filter = np.array([1.0])
 
         # computing optical flow
         if compute_motion or self.__last_returned_of is None:
@@ -189,9 +195,11 @@ class InputStream:
                 self.frames = self.__last_returned_frame_number
 
         if not self.__force_gray:
-            return img, of
+            return img, of, \
+                   gaussian_filter, scaling
         else:
-            return np.reshape(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (self.__req_h, self.__req_w, 1)), of
+            return np.reshape(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (self.__req_h, self.__req_w, 1)), of, \
+                   gaussian_filter, scaling
 
     def __getinfo(self):
         if self.is_video():
@@ -363,22 +371,32 @@ class OutputStream:
                                                   + file_name + ".of", of, img, False)
 
         # saving features
-        with GzipFile(self.folder + os.sep + "features" + os.sep + folder_name + os.sep + file_name +
-                      ".feat", 'wb') as file:
-                np.save(file, features)
+        i = 0
+        for layer_features in features:
+            with GzipFile(self.folder + os.sep + "features" + os.sep + folder_name + os.sep + file_name +
+                          ".feat_" + str(i), 'wb') as file:
+                np.save(file, layer_features)
+            i = i + 1
 
         # saving filters
-        with GzipFile(self.folder + os.sep + "filters" + os.sep + folder_name + os.sep + file_name +
-                      ".fil", 'wb') as file:
-                np.save(file, filters)
+        i = 0
+        for layer_filters in filters:
+            with GzipFile(self.folder + os.sep + "filters" + os.sep + folder_name + os.sep + file_name +
+                          ".fil_" + str(i), 'wb') as file:
+                    np.save(file, layer_filters)
+            i = i + 1
 
         # saving others
-        f = open(self.folder + os.sep + "others" + os.sep + folder_name + os.sep + file_name + ".txt", 'w')
-        if f is None or not f or f.closed:
-            raise IOError("Cannot access: " + self.folder + os.sep + "others" + os.sep + folder_name
-                          + os.sep + file_name + ".txt")
-        json.dump(others, f, indent=4)
-        f.close()
+        i = 0
+        for layer_others in others:
+            f = open(self.folder + os.sep + "others" + os.sep + folder_name + os.sep + file_name +
+                     "_" + str(i) + ".txt", 'w')
+            if f is None or not f or f.closed:
+                raise IOError("Cannot access: " + self.folder + os.sep + "others" + os.sep + folder_name
+                              + os.sep + file_name + "_" + str(i) + ".txt")
+            json.dump(layer_others, f, indent=4)
+            f.close()
+            i = i + 1
 
         self.__last_saved_frame_number = self.__last_saved_frame_number + 1
 
@@ -392,4 +410,7 @@ class OutputStream:
         f.close()
 
     def set_last_frame(self, last_frame_number):
-        self.__last_saved_frame_number = last_frame_number - 1
+        self.__last_saved_frame_number = last_frame_number
+
+    def get_last_frame(self):
+        return self.__last_saved_frame_number

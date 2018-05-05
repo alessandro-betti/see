@@ -6,34 +6,43 @@ import shutil
 
 class FeatureExtractor:
 
-    def __init__(self, w, h, options, resume=False):
+    def __init__(self, w, h, options, resume=False,
+                 layer=0, session_data=None, input_data=None, motion_data=None,
+                 prev_layers_ops=None, prev_layers_summary_ops=None):
         self.__first_frame = True
         self.step = 1
+        self.layer = layer
 
         # saving options (and other useful values) to direct attributes
+        self.f = options['f'][layer]  # full edge of the filter (i.e., 3 in case of 3x3 filters)
+        self.n = options['n'][layer]  # input channels/features
+        self.m = options['m'][layer]  # output features
+        self.init_q = options['init_q'][layer]
+        self.alpha = options['alpha'][layer]
+        self.beta = options['beta'][layer]
+        self.theta = options['theta'][layer]
+        self.k = options['k'][layer]
+        self.gamma = options['gamma'][layer]
+        self.lambdaE = options['lambdaE'][layer]
+        self.lambdaC = options['lambdaC'][layer]
+        self.lambdaM = options['lambdaM'][layer]
+        self.eps1 = options['eps1'][layer] * self.m
+        self.eps2 = options['eps2'][layer] * self.m
+        self.eps3 = options['eps3'][layer] * self.m
+        self.c_eps1 = options['c_eps1'][layer] * self.m
+        self.c_eps2 = options['c_eps2'][layer] * self.m
+        self.c_eps3 = options['c_eps3'][layer] * self.m
+        self.c_frames = options['c_frames'][layer]
+        self.c_frames_min = options['c_frames_min'][layer]
+        self.gew = options['gew'][layer]
+        self.eta = options['eta'][layer]
+        self.init_fixed = options['init_fixed'][layer]
+        self.rho = options['rho'][layer]
+        self.day_only = options['day_only'][layer]
+
         self.step_size = options['step_size']
         self.step_adapt = options['step_adapt']
-        self.f = options['f']  # full edge of the filter (i.e., 3 in case of 3x3 filters)
-        self.n = options['n']  # input channels/features
-        self.m = options['m']  # output features
-        self.init_q = options['init_q']
-        self.alpha = options['alpha']
-        self.beta = options['beta']
-        self.theta = options['theta']
-        self.k = options['k']
-        self.gamma = options['gamma']
-        self.lambdaE = options['lambdaE']
-        self.lambdaC = options['lambdaC']
-        self.lambdaM = options['lambdaM']
-        self.eps1 = options['eps1'] * self.m
-        self.eps2 = options['eps2'] * self.m
-        self.eps3 = options['eps3'] * self.m
-        self.gew = options['gew']
-        self.eta = options['eta']
         self.all_black = options['all_black']
-        self.init_fixed = options['init_fixed']
-        self.rho = options['rho']
-        self.day_only = options['day_only']
         self.grad = options['grad']
         self.root = options['root']
         self.rk = options['rk']
@@ -71,16 +80,36 @@ class FeatureExtractor:
         self.__check_params(skip_some_checks=not options['check_params'])
 
         # TensorFlow session and graph
-        self.sess = tf.Session()
-        self.process_frame_ops, self.frame_0_init_op, self.saver, self.t_reset_op = self.__build_graph()
+        if self.layer == 0:
+            self.sess = tf.Session()
+            self.process_frame_ops, self.frame_0_init_op, \
+                self.saver, self.t_reset_op, self.motion_01, self.logits, self.rho_op, self.summary_ops = \
+                self.__build_graph()
+            self.process_frame_ops = [self.process_frame_ops]
+            self.summary_ops = [self.summary_ops]
+        else:
+            self.sess = session_data
+            self.process_frame_ops, self.frame_0_init_op, \
+                self.saver, self.t_reset_op, self.motion_01, self.logits, self.rho_op, self.summary_ops = \
+                self.__build_graph(input_data, motion_data)
+            self.process_frame_ops = prev_layers_ops + [self.process_frame_ops]
+            self.summary_ops = prev_layers_summary_ops + [self.summary_ops]
         self.activate_tensor_board()
 
         # TensorFlow model, save dir
-        self.save_path = options['root'] + '/model/model.saved'
+        self.save_path = options['root'] + '/model/num_layers_' + str(self.layer) + '/model.saved'
+        self.save_path_base = options['root'] + '/model/'
 
-    def close(self):
+        # creating folders
+        if not os.path.exists(options['root'] + '/model/num_layers_' + str(self.layer)):
+            os.makedirs(options['root'] + '/model/num_layers_' + str(self.layer))
+        if not os.path.exists(self.save_path_base):
+            os.makedirs(self.save_path_base)
+
+    def close(self, close_session=True):
         self.summary_writer.close()
-        self.sess.close()
+        if close_session:
+            self.sess.close()
 
     def save(self):
         self.saver.save(self.sess, self.save_path)
@@ -90,12 +119,19 @@ class FeatureExtractor:
         self.step = steps
 
     def activate_tensor_board(self):
-        if (not self.resume) and os.path.exists(self.root + '/tensor_board'):
-            shutil.rmtree(self.root + '/tensor_board')
-        self.summary_writer = tf.summary.FileWriter(self.root + '/tensor_board', self.sess.graph)
+        if (not self.resume) and os.path.exists(self.root + '/tensor_board/layer' + str(self.layer)):
+            shutil.rmtree(self.root + '/tensor_board/layer' + str(self.layer))
+        self.summary_writer = tf.summary.FileWriter(self.root + '/tensor_board/layer' + str(self.layer),
+                                                    self.sess.graph)
+
+    def add_to_tensor_board(self, summaries):
+        self.summary_writer.add_summary(summaries, self.step - 1)
+
+    def get_rho(self):
+        return self.sess.run(self.rho_op)
 
     # processing the current frame (frame_1 below)
-    def run_step(self, frame_1_to_feed, motion_01_to_feed):
+    def run_step(self, frame_1_to_feed, motion_01_to_feed, gaussian_filter, scaling):
 
         # zero signal
         if self.all_black > 0:
@@ -112,28 +148,30 @@ class FeatureExtractor:
         fed_frame_1 = tf.get_default_graph().get_tensor_by_name("fed_frame_1:0")
         fed_motion_01 = tf.get_default_graph().get_tensor_by_name("fed_motion_01:0")
         fed_one_over_delta = tf.get_default_graph().get_tensor_by_name("fed_one_over_delta:0")
+        fed_blur_filter = tf.get_default_graph().get_tensor_by_name("fed_blur_filter:0")
+        fed_scaling = tf.get_default_graph().get_tensor_by_name("fed_scaling:0")
         feed_dict = {fed_frame_1: frame_1_to_feed,
                      fed_motion_01: motion_01_to_feed,
-                     fed_one_over_delta: one_over_delta}
+                     fed_one_over_delta: one_over_delta,
+                     fed_blur_filter: gaussian_filter,
+                     fed_scaling: scaling}
 
         # fixing the case of the first frame
         if self.__first_frame:
-            self.sess.run(self.frame_0_init_op, feed_dict=feed_dict)
+            if self.step <= 1:
+                self.sess.run(self.frame_0_init_op, feed_dict=feed_dict)
             if self.step == 1:
                 self.sess.run(self.t_reset_op, feed_dict=feed_dict)
             self.__first_frame = False
 
         # running the computations over the TensorFlow graph
-        ret = self.sess.run(self.process_frame_ops, feed_dict=feed_dict)
-
-        # TensorBoard-related
-        self.summary_writer.add_summary(ret[-2], self.step)
+        ret, summaries = self.sess.run([self.process_frame_ops, self.summary_ops], feed_dict=feed_dict)
 
         # next step
         self.step = self.step + 1
 
         # returning data (no output printing in this class, please!)
-        return ret[0:-2]
+        return ret, summaries
 
     def __check_params(self, skip_some_checks=False):
         if self.f < 3 or self.f % 2 == 0:
@@ -181,28 +219,42 @@ class FeatureExtractor:
             if self.k >= val:
                 raise ValueError("Invalid k: " + str(self.k) + " (it must be < " + str(val) + ")")
 
-    def __build_graph(self):
+    def __build_graph(self, input_data=None, motion_data=None):
 
         # TensorFlow precision
         precision = tf.float32
 
         # TensorFlow inputs
-        fed_frame_1 = tf.placeholder(precision, name="fed_frame_1")
-        fed_motion_01 = tf.placeholder(precision, name="fed_motion_01")
-        fed_one_over_delta = tf.placeholder(precision, shape=(), name="fed_one_over_delta")
+        if self.layer == 0:
+            assert (input_data is None) and (motion_data is  None), "Invalid configuration!"
+        else:
+            assert (input_data is not None) and (motion_data is not None), "Invalid configuration!"
+
+        if self.layer == 0:
+            fed_frame_1 = tf.placeholder(precision, name="fed_frame_1")
+            fed_motion_01 = tf.placeholder(precision, name="fed_motion_01")
+            fed_one_over_delta = tf.placeholder(precision, shape=(), name="fed_one_over_delta")
+            fed_blur_filter = tf.placeholder(precision, name="fed_blur_filter")
+            fed_scaling = tf.placeholder(precision, name="fed_scaling")
+        else:
+            fed_one_over_delta = tf.get_default_graph().get_tensor_by_name("fed_one_over_delta:0")
+            fed_blur_filter = tf.get_default_graph().get_tensor_by_name("fed_blur_filter:0")
+            fed_scaling = tf.get_default_graph().get_tensor_by_name("fed_scaling:0")
 
         # TensorFlow variables (main scope)
-        with tf.variable_scope("main", reuse=False):
+        layer_scope = "layer" + str(self.layer)
+        with tf.variable_scope(layer_scope, reuse=False):
             rho = tf.get_variable("rho", (), dtype=precision,
                                   initializer=tf.constant_initializer(self.rho, dtype=precision))
             is_night = tf.get_variable("night", (), dtype=precision,
                                        initializer=tf.constant_initializer(0.0, dtype=precision))
-            t = tf.get_variable("t", (), dtype=precision, initializer=tf.constant_initializer(0.0, dtype=precision))
+            t = tf.get_variable("t", (), dtype=precision,
+                                initializer=tf.constant_initializer(0.0, dtype=precision))
             avg_p_full = tf.get_variable("avg_p_full", [self.m], dtype=precision,
                                          initializer=tf.constant_initializer(0.0, dtype=precision))
             avg_p_log_p_full = tf.get_variable("avg_p_log_p_full", [self.m], dtype=precision,
                                                initializer=tf.constant_initializer(0.0, dtype=precision))
-            motion_full = tf.get_variable("motion_full", (), dtype=precision,
+            motion_full = tf.get_variable("motion_full", [2], dtype=precision,
                                           initializer=tf.constant_initializer(0.0, dtype=precision))
             obj_comp_values = tf.get_variable("obj_comp_values", [12], dtype=precision,
                                               initializer=tf.constant_initializer(0.0, dtype=precision))
@@ -214,10 +266,15 @@ class FeatureExtractor:
             # variables that store what has been computed in the previous frame
             frame_0 = tf.get_variable("frame_0", [1, self.h, self.w, self.n], dtype=precision,
                                       initializer=tf.zeros_initializer)
-            M_block_0 = tf.get_variable("M_block_0", [self.ffn, self.ffn], dtype=precision,
-                                        initializer=tf.zeros_initializer)
-            N_block_0 = tf.get_variable("N_block_0", [self.ffn, self.ffn], dtype=precision,
-                                        initializer=tf.zeros_initializer)
+            winning_features_0 = tf.get_variable("winning_features_0", [self.wh], dtype=tf.int32,
+                                                 initializer=tf.zeros_initializer)
+
+            if self.lambdaM > 0.0:
+                M_block_0 = tf.get_variable("M_block_0", [self.ffn, self.ffn], dtype=precision,
+                                            initializer=tf.zeros_initializer)
+                N_block_0 = tf.get_variable("N_block_0", [self.ffn, self.ffn], dtype=precision,
+                                            initializer=tf.zeros_initializer)
+
             if self.grad and self.step_adapt:
                 gradient_like_0 = tf.get_variable("gradient_like_0", [self.ffn, self.m], dtype=precision,
                                                   initializer=tf.constant_initializer(-1.0, dtype=precision))
@@ -237,10 +294,22 @@ class FeatureExtractor:
                                  initializer=tf.constant_initializer(0.0))  # q^(3)
 
             # getting frames (rescaling to [0,1]) and motion (the first motion component indicates horizontal motion)
-            frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_1, 255.0), 0))
-            t_reset_op = tf.assign(t, 0.0)
-            frame_1 = tf.expand_dims(tf.div(fed_frame_1, 255.0), 0)  # adding fake batch dimension 1 x h x w x n
-            motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal motion)
+            if self.layer == 0:
+                input_scale = 255.0
+                frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(fed_frame_1, input_scale), 0))
+                frame_1 = tf.expand_dims(tf.div(fed_frame_1, input_scale), 0)  # adding fake batch dim 1 x h x w x n
+            else:
+                input_scale = 1.0
+                frame_0_init_op = tf.assign(frame_0, tf.expand_dims(tf.div(input_data, input_scale), 0))
+                frame_1 = tf.expand_dims(tf.div(input_data, input_scale), 0)  # adding fake batch dim 1 x h x w x n
+                frame_1 = self.__blur(frame_1, fed_blur_filter, fed_scaling)  # blurring/scaling
+
+            t_reset_op = [tf.assign(t, 0.0), tf.assign(rho, self.rho)]
+
+            if self.layer == 0:
+                motion_01 = tf.expand_dims(fed_motion_01, 3)  # h x w x 2 x 1 (the 1st motion comp. is horizontal)
+            else:
+                motion_01 = motion_data
 
             # computing norm of variables
             norm_q = tf.reduce_sum(tf.square(q1))
@@ -269,16 +338,35 @@ class FeatureExtractor:
             # mask_var = tf.expand_dims(tf.cast(tf.greater(var, 0.001), precision), 1)
             # frame_patches = tf.multiply(frame_patches, mask_var)
 
+            # convolution
+            logits_maps = tf.matmul(frame_patches, q1)
+            feature_maps = tf.nn.softmax(logits_maps, axis=1)  # wh x m
+
+            # out_logits_maps = tf.reshape(logits_maps, [self.h, self.w, self.m])
+            out_logits_maps = tf.reshape(tf.div(feature_maps, tf.reduce_max(feature_maps, 1, keepdims=True)),
+                                         [self.h, self.w, self.m])
+
+            # objective function terms: ce, -ge, mi
+            biased_maps = float(self.gew) * feature_maps + (1.0 - float(self.gew)) * feature_map_stats
+            ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
+            minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(biased_maps, 0))), self.g_scale * self.g_scale)
+
+            ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
+            minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
+
+            mi2 = - ce - minus_ge
+
+            mi = mi2 + 1.0
+
+            # objective function terms: motion
             if self.lambdaM > 0.0:
 
                 # getting the spatial gradient (h x w x 2 x n (the first spatial component is horizontal))
-                spatial_gradient = tf.cast(
-                    FeatureExtractor.__spatial_gradient(tf.cast(frame_1, tf.float32),
-                                                        self.h, self.w, self.n), precision)  # frame 1 here
+                spatial_gradient = FeatureExtractor.__spatial_gradient(frame_1, self.h, self.w, self.n)  # frame 1 here
 
                 # mixing the spatial gradient with motion (element-wise product + sum): h x w x n
                 v_delta_gamma = tf.reduce_sum(tf.multiply(spatial_gradient,
-                                                          motion_01), 2)  # broadcast (and then sum) over "n"
+                                                          motion_01), 2)  # broadcast over "n", then sum on x,y
                 v_delta_gamma = tf.expand_dims(v_delta_gamma, 0)  # 1 x h x w x n
 
                 # derivative of the input over time (fed_one_over_delta = 0 when t = 0)
@@ -299,38 +387,32 @@ class FeatureExtractor:
                 N_block_1 = tf.div(tf.matmul(gamma_dot_v_delta_patches,
                                              frame_patches, transpose_a=True), self.g_scale)
 
-                # other derivatives over time (fed_one_over_delta = 0 when t = 0)
-                M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0),
-                                          fed_one_over_delta)  # filter vol x filter vol
-                N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0),
-                                          fed_one_over_delta)  # filter vol x filter vol
-            else:
-                gamma_dot = tf.eye(1)
-                M_block_dot = tf.eye(1)
-                N_block_dot = tf.eye(1)
-
-            # convolution
-            feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)  # wh x m
-
-            # objective function terms: ce, -ge, mi
-            biased_maps = float(self.gew) * feature_maps + (1.0 - float(self.gew)) * feature_map_stats
-            ce2 = -tf.div(tf.reduce_sum(tf.square(feature_maps)), self.g_scale)
-            minus_ge2 = tf.div(tf.reduce_sum(tf.square(tf.reduce_sum(biased_maps, 0))), self.g_scale * self.g_scale)
-
-            ce = ((ce2 + 1.0) * float(self.m)) / (float(self.m) - 1.0)
-            minus_ge = (float(self.m) * minus_ge2 - 1.0) / (float(self.m) - 1.0)
-
-            mi2 = - ce - minus_ge
-
-            mi = mi2 + 1.0
-
-            # objective function terms: motion
-            if self.lambdaM > 0.0:
+                # obj term
                 motion = tf.reduce_sum(tf.multiply(q2, tf.matmul(M_block_1, q2))) \
                     + 2.0 * tf.reduce_sum(tf.multiply(q1, tf.matmul(N_block_1, q2))) \
                     + tf.reduce_sum(tf.multiply(q1, tf.matmul(O_block, q1)))
+
+                # measure term
+                winning_features_1 = tf.argmax(feature_maps, axis=1, output_type=tf.int32)
+                i = tf.tile(tf.reshape(tf.cast(tf.range(self.h), tf.float32), [self.h, 1]), [1, self.w])
+                j = tf.tile(tf.reshape(tf.cast(tf.range(self.w), tf.float32), [1, self.w]), [self.h, 1])
+                ii = tf.minimum(tf.maximum(tf.cast(tf.round(i - motion_01[:,:,1,0]), tf.int32), 0), self.h-1)
+                jj = tf.minimum(tf.maximum(tf.cast(tf.round(j - motion_01[:,:,0,0]), tf.int32), 0), self.w-1)
+                ii_jj = tf.reshape(ii * self.w + jj, [self.wh])
+                target_winning_features_0 = tf.gather(winning_features_0, ii_jj)
+                is_first_frame = tf.cast(tf.minimum(t, 1.0), tf.int32)
+                motion_acc = 1.0 - tf.div(tf.count_nonzero(is_first_frame * winning_features_1 -
+                                                           target_winning_features_0, dtype=tf.float32), float(self.wh))
+
             else:
+
+                # obj term
                 motion = 0.0
+
+                # measure term
+                is_first_frame = tf.eye(1)
+                winning_features_1 = tf.zeros_like(winning_features_0)
+                motion_acc = 0.0
 
             # objective function
             obj = self.lambdaC * 0.5 * ce2 + self.lambdaE * 0.5 * minus_ge2 + \
@@ -349,17 +431,20 @@ class FeatureExtractor:
             mi_real = tf.reduce_sum(avg_p_log_p) - \
                 tf.reduce_sum(tf.multiply(avg_p, tf.div(tf.log(avg_p), np.log(self.m))))
 
-            # updating stats
-            t_update = tf.assign_add(t, 1.0)
-            avg_p_full_update = tf.assign_add(avg_p_full, (avg_p - avg_p_full) / t_update)
-            avg_p_log_p_full_update = tf.assign_add(avg_p_log_p_full, (avg_p_log_p - avg_p_log_p_full) / t_update)
-            mi_real_full = tf.reduce_sum(avg_p_log_p_full_update) - \
-                tf.reduce_sum(tf.multiply(avg_p_full_update, tf.div(tf.log(avg_p_full_update), np.log(self.m))))
-            motion_full_update = tf.assign_add(motion_full, (motion - motion_full) / t_update)
-
             # scaling
             w = tf.exp(self.theta * t)
             scaling = obj_comp_values[0] + w
+
+            # updating stats
+            with tf.control_dependencies([scaling,is_first_frame]):
+                up_t = tf.assign_add(t, 1.0)
+                avg_p_full_update = tf.assign_add(avg_p_full, (avg_p - avg_p_full) / up_t)
+                avg_p_log_p_full_update = tf.assign_add(avg_p_log_p_full, (avg_p_log_p - avg_p_log_p_full) / up_t)
+                ce_real_full = -tf.reduce_sum(avg_p_log_p_full_update)
+                minus_ge_real_full = tf.reduce_sum(tf.multiply(avg_p_full_update,
+                                                               tf.div(tf.log(avg_p_full_update), np.log(self.m))))
+                mi_real_full = (-ce_real_full) - minus_ge_real_full
+                motion_full_update = tf.assign_add(motion_full, (tf.stack([motion, motion_acc]) - motion_full) / up_t)
 
             # average on objective function terms
             obj_comp = (obj_comp_values[1] * obj_comp_values[0] + obj * w) / scaling
@@ -386,7 +471,10 @@ class FeatureExtractor:
             tf.summary.scalar("AA_Night", night)
             tf.summary.scalar('AB_Rho', rho)
             tf.summary.scalar("AC_RealMutualInformationFull", mi_real_full)
-            tf.summary.scalar("AD_MotionFull", motion_full_update)
+            tf.summary.scalar("AD_RealConditionalEntropyFull", ce_real_full)
+            tf.summary.scalar("AE_RealMinusEntropyFull", minus_ge_real_full)
+            tf.summary.scalar("AF_MotionFull", motion_full_update[0])
+            tf.summary.scalar("AG_MotionAccFull", motion_full_update[1])
 
             tf.summary.scalar("BA_CognitiveAction", obj)
             tf.summary.scalar('BB_MutualInformation', mi)
@@ -412,11 +500,36 @@ class FeatureExtractor:
             tf.summary.scalar("CJ_CompleteNormQDot_QDotDot", norm_q_mixed_comp)
             tf.summary.scalar("CK_CompleteNormQDotDotDot", norm_q_dot_dot_dot_comp)
 
+            # updating cyclic dependencies and stats (forward-related)
+            with tf.control_dependencies([obj_comp_values_updated]):
+                up_frame_0 = tf.assign(frame_0, frame_1)
+                up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
+                up_winning_features_0 = tf.assign(winning_features_0, winning_features_1)
+                diff_rho = 1.0 - rho
+                up_night = tf.assign(is_night, night)
+                up_rho = tf.assign_add(rho, self.eta * tf.cast(tf.greater(diff_rho, 0.0), precision)
+                                       * diff_rho * (1.0 - night))
+
+            # forward operations
+            with tf.control_dependencies([obj_comp_values_updated,
+                                          up_t, up_frame_0, up_winning_features_0,
+                                          up_feature_map_stats, up_rho, up_night]):
+                forward = tf.eye(1)
+
             # intermediate terms
             if self.lambdaM > 0.0:
                 N_block_1_trans = tf.transpose(N_block_1)  # filter_volume x filter_volume
 
-            # D (this is just a portion of the D matrix in the paper)
+                # other derivatives over time (fed_one_over_delta = 0 when t = 0)
+                M_block_dot = tf.multiply(tf.subtract(M_block_1, M_block_0),
+                                          fed_one_over_delta)  # filter vol x filter vol
+                N_block_dot = tf.multiply(tf.subtract(N_block_1, N_block_0),
+                                          fed_one_over_delta)  # filter vol x filter vol
+            else:
+                M_block_dot = tf.eye(1)
+                N_block_dot = tf.eye(1)
+
+            # D (this is just a portion of the D matrix in the paper) - q^(3): q1 in the code
             if self.lambdaM > 0.0:
                 D = self.k * tf.cast(tf.eye(self.ffn), precision) \
                     - (self.lambdaM * self.theta) * N_block_1_trans \
@@ -425,7 +538,7 @@ class FeatureExtractor:
                 if not self.grad_order2:
                     D = self.k * tf.cast(tf.eye(self.ffn), precision)
 
-            # C
+            # C - q^(2): q2 in the code
             if self.lambdaM > 0.0:
                 C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
                     tf.cast(tf.eye(self.ffn), precision) \
@@ -436,7 +549,7 @@ class FeatureExtractor:
                     C = (self.gamma * self.theta * self.theta - self.beta * self.theta) * \
                         tf.cast(tf.eye(self.ffn), precision)
 
-            # B
+            # B - q^(1): q3 in the code
             if self.lambdaM > 0.0:
                 B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
                     * tf.cast(tf.eye(self.ffn), precision) - self.lambdaM * M_block_1
@@ -445,11 +558,11 @@ class FeatureExtractor:
                     B = (self.alpha * self.theta * self.theta + self.gamma * self.theta - self.beta) \
                         * tf.cast(tf.eye(self.ffn), precision)
 
-            # A
+            # A - q: q4 in the code
             if not self.grad_order2:
                 A = 2.0 * self.theta * self.alpha
 
-            # F
+            # F - nothing
             g = 1.0 / self.g_scale
             Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
             Ss = feature_maps * feature_maps * g
@@ -489,11 +602,24 @@ class FeatureExtractor:
                         increase = tf.cast(tf.greater(gradient_like4 * gradient_like_0, 0.0), precision)
                         reduce = 1.0 - increase
                         step_size_up = tf.assign(step_size,
-                                                 tf.minimum(tf.maximum(step_size * 0.1 * reduce +
-                                                                       step_size * 2.0 * increase,
-                                                                       self.step_size), self.step_size * 1000))
+                                                 tf.minimum(tf.maximum(step_size * 0.1 * reduce + step_size * 2.0 * increase,
+                                                            self.step_size), self.step_size * 1000))
                     else:
                         step_size_up = step_size
+
+            # updating cyclic dependencies and stats (backward-related)
+            with tf.control_dependencies([step_size_up]):
+                if self.lambdaM > 0.0:
+                    up_M_block_0 = tf.assign(M_block_0, M_block_1)
+                    up_N_block_0 = tf.assign(N_block_0, N_block_1)
+                else:
+                    up_M_block_0 = tf.eye(1)
+                    up_N_block_0 = tf.eye(1)
+
+                if self.step_adapt and self.grad:
+                    up_gradient_like_0 = tf.assign(gradient_like_0, gradient_like4)
+                else:
+                    up_gradient_like_0 = tf.eye(1)
 
             # update rules
             with tf.control_dependencies([step_size_up]):
@@ -513,34 +639,9 @@ class FeatureExtractor:
                 else:
                     up_q4 = tf.assign_sub(q1, gradient_like4 * step_size_up)
 
-            # updating cyclic dependencies and stats
-            with tf.control_dependencies([gamma_dot, M_block_dot, N_block_dot, step_size_up, minus_ge2]):
-                up_frame_0 = tf.assign(frame_0, frame_1)
-
-                if self.lambdaM > 0.0:
-                    up_M_block_0 = tf.assign(M_block_0, M_block_1)
-                    up_N_block_0 = tf.assign(N_block_0, N_block_1)
-                else:
-                    up_M_block_0 = tf.eye(1)
-                    up_N_block_0 = tf.eye(1)
-
-                if self.step_adapt and self.grad:
-                    up_gradient_like_0 = tf.assign(gradient_like_0, gradient_like4)
-                else:
-                    up_gradient_like_0 = tf.eye(1)
-
-                up_feature_map_stats = tf.assign(feature_map_stats, biased_maps)
-
-                diff_rho = 1.0 - rho
-                up_night = tf.assign(is_night, night)
-                up_rho = tf.assign_add(rho, self.eta * tf.cast(tf.greater(diff_rho, 0.0), precision)
-                                       * diff_rho * (1.0 - night))
-
-            # coordinator
-            with tf.control_dependencies([up_q4, up_frame_0, up_M_block_0, up_N_block_0,
-                                          up_gradient_like_0, t_update,
-                                          up_feature_map_stats, up_rho, up_night, obj_comp_values_updated]):
-                fake_op = tf.eye(1)
+            # backward and update operations
+            with tf.control_dependencies([up_q4, up_M_block_0, up_N_block_0, up_gradient_like_0]):
+                backward_and_update = tf.eye(1)
 
             # operations to be executed in the data flow graph (filters_matrix: filter_volume x m)
             out_feature_maps = tf.reshape(feature_maps, [self.h, self.w, self.m])  # h x w x m
@@ -549,36 +650,50 @@ class FeatureExtractor:
             # summaries
             tf.summary.scalar("ZA_Norm_FTimesAlpha", tf.reduce_sum(tf.square(F)))
             tf.summary.scalar("ZB_Q00", q1[0][0])
-            summary_ops = tf.summary.merge_all()
+            summary_ops = tf.summary.merge_all(scope=layer_scope)
 
             ops = [out_feature_maps, out_filters_map,
                    obj_values, obj_comp_values_updated,
-                   up_night, up_rho,
-                   mi_real_full, motion_full_update,
-                   summary_ops,
-                   fake_op]
+                   [up_night, up_rho],
+                   [mi_real_full, ce_real_full, minus_ge_real_full, motion_full_update[0], motion_full_update[1]],
+                   forward, backward_and_update]
 
             # initialization
             if not self.resume:
-                self.sess.run(tf.global_variables_initializer())
+                self.sess.run(tf.variables_initializer(tf.global_variables(layer_scope)))  # layer-wise initialization
 
             saver = tf.train.Saver()
 
-        return ops, frame_0_init_op, saver, t_reset_op
+        return ops, frame_0_init_op, saver, t_reset_op, motion_01, out_logits_maps, rho, summary_ops
 
     @staticmethod
     def __spatial_gradient(source, h, w, n):
-        up_down_filter = tf.reshape(tf.constant([-1, 0, +1], source.dtype), [3, 1, 1, 1])
-        left_right_filter = tf.reshape(up_down_filter, [1, 3, 1, 1])
+        channel_filter = tf.eye(n)
+        filter_pattern = tf.reshape(tf.constant([-1.0, 0.0, +1.0], source.dtype), [1,3])
 
-        input_t = tf.transpose(source)  # n x w x h x 1
+        left_right_filter = (tf.expand_dims(tf.expand_dims(filter_pattern, -1), -1) *
+                             tf.expand_dims(tf.expand_dims(channel_filter, 0), 0))
+        up_down_filter = (tf.expand_dims(tf.expand_dims(tf.transpose(filter_pattern), -1), -1) *
+                          tf.expand_dims(tf.expand_dims(channel_filter, 0), 0))
 
-        # n x w x h x 1 (each)
-        up_down_grad = tf.nn.conv2d(input_t, up_down_filter, strides=[1, 1, 1, 1], padding='SAME')
-        left_right_grad = tf.nn.conv2d(input_t, left_right_filter, strides=[1, 1, 1, 1], padding='SAME')
+        # 1 x h x w x n (each)
+        left_right_grad = tf.nn.conv2d(source, left_right_filter, strides=[1, 1, 1, 1], padding='SAME')
+        up_down_grad = tf.nn.conv2d(source, up_down_filter, strides=[1, 1, 1, 1], padding='SAME')
 
-        # returns: 1 x h x w x 2 x n (the first spatial component - 4th axis - is horizontal)
-        return tf.reshape(tf.transpose(tf.stack([left_right_grad, up_down_grad], axis=1)), [h, w, 2, n])
+        # returns: h x w x 2 x n (the first spatial component - 3rd axis - is horizontal)
+        return tf.reshape(tf.stack([left_right_grad, up_down_grad], axis=3), [h, w, 2, n])
+
+        # up_down_filter = tf.reshape(tf.constant([-1, 0, +1], source.dtype), [3, 1, 1, 1])
+        # left_right_filter = tf.reshape(up_down_filter, [1, 3, 1, 1])
+        #
+        # input_t = tf.transpose(source)  # n x w x h x 1
+        #
+        # # n x w x h x 1 (each)
+        # up_down_grad = tf.nn.conv2d(input_t, up_down_filter, strides=[1, 1, 1, 1], padding='SAME')
+        # left_right_grad = tf.nn.conv2d(input_t, left_right_filter, strides=[1, 1, 1, 1], padding='SAME')
+        #
+        # # returns: h x w x 2 x n (the first spatial component - 3rd axis - is horizontal)
+        # return tf.reshape(tf.transpose(tf.stack([up_down_grad, left_right_grad], axis=1)), [h, w, 2, n])
 
     def __extract_patches(self, data):
         return tf.reshape(tf.extract_image_patches(data,
@@ -598,7 +713,7 @@ class FeatureExtractor:
         frame_patches = self.__extract_patches(tf.expand_dims(
             tf.div(tf.cast(tf.identity(current_img), precision), 255.0), 0))
 
-        feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), dim=1)
+        feature_maps = tf.nn.softmax(tf.matmul(frame_patches, q1), axis=1)
         Sg = tf.expand_dims(tf.reduce_sum(feature_maps * g, 0), 0)
         Ss = feature_maps * feature_maps * g
         F_ge = feature_maps * (Sg * g) - tf.matmul(feature_maps, Sg * g, transpose_b=True) * feature_maps
@@ -611,3 +726,20 @@ class FeatureExtractor:
         gradient_like4 = tf.identity(D_q1 + C_q2 + F + B_q3 + A_q4) / self.alpha
 
         return gradient_like1, gradient_like2, gradient_like3, gradient_like4
+
+    def __blur(self, image, pixel_filter, scaling):
+        pixel_filter = tf.reshape(pixel_filter, [tf.size(pixel_filter),1])
+        channel_filter = tf.eye(self.n)
+        _filter1 = (tf.expand_dims(tf.expand_dims(pixel_filter, -1), -1) *
+                    tf.expand_dims(tf.expand_dims(channel_filter, 0), 0))
+        _filter2 = (tf.expand_dims(tf.expand_dims(tf.transpose(pixel_filter), -1), -1) *
+                    tf.expand_dims(tf.expand_dims(channel_filter, 0), 0))
+        result_batch1 = tf.nn.conv2d(image,
+                                     filter=_filter1,
+                                     strides=[1, 1, 1, 1],
+                                     padding='SAME')
+        result_batch2 = tf.nn.conv2d(result_batch1,
+                                     filter=_filter2,
+                                     strides=[1, 1, 1, 1],
+                                     padding='SAME')
+        return scaling * result_batch2
