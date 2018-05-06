@@ -54,6 +54,7 @@ class Worker:
         info = {'last_layer': self.__layer,
                 'last_layer_steps': self.layer_steps,
                 'steps': self.steps,
+                'completed_repetitions': self.__completed_repetitions,
                 'frame': self.input_stream.get_last_frame_number(),
                 'time': self.input_stream.get_last_frame_time(),
                 'last_saved_frame': self.output_stream.get_last_frame()}
@@ -83,8 +84,8 @@ class Worker:
                 for j in range(0, len(captions)-1):
                     f.write("%s" % captions[j])
                     f.write("(" + str(j) + "),")
-                f.write("%s\n" % captions[len(captions)-1])
-                f.write("(" + str(len(captions)-1) + ")")
+                f.write("%s" % captions[len(captions)-1])
+                f.write("(" + str(len(captions)-1) + ")\n")
                 f.close()
 
             f = open(layer_log, "a")
@@ -99,64 +100,85 @@ class Worker:
             self.log[i] = []  # clearing
 
     def load(self, reset_stream=False):
+        f = open(self.fe[0].save_path_base + "/info.txt", "r")
+        if f is None or not f or f.closed:
+            raise IOError("Cannot access: " + self.fe[0].save_path_base + "/info.txt")
+        info = json.load(f)
+        f.close()
+
+        self.__layer = info['last_layer']
+
+        if self.__layer >= 1:
+            self.fe[0].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
+
+        for i in range(1, self.__layer + 1):
+            prev_layer_session = self.fe[i - 1].sess
+            # prev_layer_output = self.fe[i - 1].process_frame_ops[i - 1][0]
+            prev_layer_output = self.fe[i - 1].logits
+            prev_layer_motion = self.fe[i - 1].motion_01
+            prev_layers_ops = self.fe[i - 1].process_frame_ops
+            prev_layers_summary_ops = self.fe[i - 1].summary_ops
+            self.fe.append(FeatureExtractor(self.w, self.h, self.options, True,
+                                            i,
+                                            prev_layer_session,
+                                            prev_layer_output,
+                                            prev_layer_motion,
+                                            prev_layers_ops,
+                                            prev_layers_summary_ops))
+            if i < self.__layer:
+                self.fe[i].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
+
         if not reset_stream:
-            f = open(self.fe[0].save_path_base + "/info.txt", "r")
-            if f is None or not f or f.closed:
-                raise IOError("Cannot access: " + self.fe[0].save_path_base + "/info.txt")
-            info = json.load(f)
-            f.close()
 
-            self.steps = info['steps']
-            self.__layer = info['last_layer']
-            self.layer_steps = info['last_layer_steps']
-
+            # resume stream
             self.input_stream.get_next(sample_only=True)  # ensure that the stream is open
             self.input_stream.set_last_frame_and_time(info['frame'], info['time'])
             self.output_stream.set_last_frame(info['last_saved_frame'])
+            self.__completed_repetitions = info['completed_repetitions']
 
-            if self.__layer >= 1:
-                self.fe[0].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
+            # worker-steps
+            self.steps = info['steps']  # worker-steps start from 0
+            self.layer_steps = info['last_layer_steps']
 
-            for i in range(1, self.__layer + 1):
-                prev_layer_session = self.fe[i - 1].sess
-                # prev_layer_output = self.fe[i - 1].process_frame_ops[i - 1][0]
-                prev_layer_output = self.fe[i - 1].logits
-                prev_layer_motion = self.fe[i - 1].motion_01
-                prev_layers_ops = self.fe[i - 1].process_frame_ops
-                prev_layers_summary_ops = self.fe[i - 1].summary_ops
-                self.fe.append(FeatureExtractor(self.w, self.h, self.options, True,
-                                                i,
-                                                prev_layer_session,
-                                                prev_layer_output,
-                                                prev_layer_motion,
-                                                prev_layers_ops,
-                                                prev_layers_summary_ops))
-                if i < self.__layer:
-                    self.fe[i].process_frame_ops[-1].pop()  # freezing: the last operation is "backward and update"
-
+            # layer-steps
             for i in range(0, self.__layer):
-                self.fe[i].step = self.steps
-                self.log.append([])
-            self.fe[self.__layer].load(self.steps)
+                self.fe[i].step = self.steps + 1  # layer-steps start from 1
 
+            # creating log-lists (one list was already created in the constructor)
+            for i in range(0, self.__layer):
+                self.log.append([])
+
+            # load (and set number of steps)
+            self.fe[self.__layer].load(self.steps + 1)  # layer-steps start from 1
+
+            # get rho
+            for i in range(0, self.__layer + 1):
+                self.__rho[i] = self.fe[i].get_rho()
+        else:
+
+            # do not resume stream
+            self.__completed_repetitions = 0
+
+            # worker-steps
+            self.steps = 0.0  # worker-steps start from 0
+            self.layer_steps = 0  # worker-steps start from 0
+
+            # layer-steps
+            for i in range(0, self.__layer):
+                self.fe[i].step = 1  # layer-steps start from 1
+
+            # creating log-lists (one list was already created in the constructor)
+            for i in range(0, self.__layer):
+                self.log.append([])
+
+            # load
+            self.fe[self.__layer].load(0)  # this "0" is a special code to say "reset t!" (steps will then be set to 1)
+
+            # get rho
             for i in range(0, self.__layer + 1):
                 self.__rho[i] = self.fe[i].get_rho()
 
-        else:
-            self.steps = 0.0
-
-            for i in range(1, self.__layer + 1):
-                prev_layer_session = self.fe[self.__layer - 1].sess
-                prev_layer_output = self.fe[self.__layer - 1].process_frame_ops[self.__layer - 1][0]
-                prev_layer_motion = self.fe[self.__layer - 1].motion_01
-                prev_layers_ops = self.fe[self.__layer - 1].process_frame_ops
-                self.fe.append(FeatureExtractor(self.w, self.h, self.options, True,
-                                                i,
-                                                prev_layer_session,
-                                                prev_layer_output,
-                                                prev_layer_motion,
-                                                prev_layers_ops))
-
+            # prepare initialization/reset operations
             frame_0_init_ops = []
             t_reset_ops = []
             for i in range(0, self.__layer + 1):
@@ -165,17 +187,15 @@ class Worker:
             self.fe[self.__layer].frame_0_init_op = frame_0_init_ops
             self.fe[self.__layer].t_reset_ops = t_reset_ops
 
-            for i in range(0, self.__layer):
-                self.fe[i].step = 1
-            self.fe[self.__layer].load(1)
+            # clearing output, model, tensor-board folders and recreating them
+            self.output_stream.create_folders(True)
 
-            for i in range(0, self.__layer + 1):
-                self.__rho[i] = self.fe[i].get_rho()
-
-            self.output_stream.create_folders(True)  # clearing folders and recreating them
-
+            # recreating tensor-board folders (they were deleted by the "clearing" operation above)
             for i in range(0, self.__layer + 1):
                 self.fe[i].activate_tensor_board()
+
+            # recreating the folder where the model is saved (it was deleted by the "clearing" operation above)
+            self.fe[self.__layer].create_model_folders()
 
     def run_step(self):
 
@@ -261,7 +281,7 @@ class Worker:
                           'eps2': self.fe[i].eps2,
                           'eps3': self.fe[i].eps3}
 
-                self.log[i].append(np.append(np.append(np.append(np.append([self.steps + 1],
+                self.log[i].append(np.append(np.append(np.append(np.append([self.steps + 1],  # layer-steps start from 1
                                                                            obj_values),
                                                                  obj_comp_values),
                                                        is_night_next_rho),
@@ -336,7 +356,7 @@ class Worker:
                                                     prev_layer_motion,
                                                     prev_layers_ops,
                                                     prev_layers_summary_ops))
-                    self.fe[self.__layer].step = self.steps
+                    self.fe[self.__layer].step = self.steps + 1  # layer-steps start from 1
 
         else:
             status = False

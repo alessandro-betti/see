@@ -97,14 +97,12 @@ class FeatureExtractor:
         self.activate_tensor_board()
 
         # TensorFlow model, save dir
-        self.save_path = options['root'] + '/model/num_layers_' + str(self.layer) + '/model.saved'
+        self.model_folder = options['root'] + '/model/num_layers_' + str(self.layer)
+        self.save_path = self.model_folder + '/model.saved'
         self.save_path_base = options['root'] + '/model/'
 
         # creating folders
-        if not os.path.exists(options['root'] + '/model/num_layers_' + str(self.layer)):
-            os.makedirs(options['root'] + '/model/num_layers_' + str(self.layer))
-        if not os.path.exists(self.save_path_base):
-            os.makedirs(self.save_path_base)
+        self.create_model_folders()
 
     def close(self, close_session=True):
         self.summary_writer.close()
@@ -118,6 +116,12 @@ class FeatureExtractor:
         self.saver.restore(self.sess, self.save_path)
         self.step = steps
 
+    def create_model_folders(self):
+        if not os.path.exists(self.save_path_base):
+            os.makedirs(self.save_path_base)
+        if not os.path.exists(self.model_folder):
+            os.makedirs(self.model_folder)
+
     def activate_tensor_board(self):
         if (not self.resume) and os.path.exists(self.root + '/tensor_board/layer' + str(self.layer)):
             shutil.rmtree(self.root + '/tensor_board/layer' + str(self.layer))
@@ -125,6 +129,9 @@ class FeatureExtractor:
                                                     self.sess.graph)
 
     def add_to_tensor_board(self, summaries):
+
+        # this method (add_to_tensor_board) is supposed to be called after having called "run_step",
+        # but since self.step gets incremented when calling "run_step", here we decrease it by 1
         self.summary_writer.add_summary(summaries, self.step - 1)
 
     def get_rho(self):
@@ -139,7 +146,7 @@ class FeatureExtractor:
             motion_01_to_feed.fill(0.0)
 
         # quantity: 1 / delta, where delta is the ratio for computing derivatives
-        if self.__first_frame and self.step == 1:
+        if self.__first_frame and self.step == 1:  # layer-steps start from 1
             one_over_delta = 0.0  # so derivatives will be zero
         else:
             one_over_delta = float(self.step_size)
@@ -160,8 +167,9 @@ class FeatureExtractor:
         if self.__first_frame:
             if self.step <= 1:
                 self.sess.run(self.frame_0_init_op, feed_dict=feed_dict)
-            if self.step == 1:
+            if self.step == 0:  # layer-steps start from 1, so the value "0" is a special code to say "reset t, please!"
                 self.sess.run(self.t_reset_op, feed_dict=feed_dict)
+                self.step = 1  # we put back the original starting value for layer-steps, that is 1
             self.__first_frame = False
 
         # running the computations over the TensorFlow graph
@@ -440,10 +448,12 @@ class FeatureExtractor:
                 up_t = tf.assign_add(t, 1.0)
                 avg_p_full_update = tf.assign_add(avg_p_full, (avg_p - avg_p_full) / up_t)
                 avg_p_log_p_full_update = tf.assign_add(avg_p_log_p_full, (avg_p_log_p - avg_p_log_p_full) / up_t)
-                ce_real_full = -tf.reduce_sum(avg_p_log_p_full_update)
-                minus_ge_real_full = tf.reduce_sum(tf.multiply(avg_p_full_update,
-                                                               tf.div(tf.log(avg_p_full_update), np.log(self.m))))
-                mi_real_full = (-ce_real_full) - minus_ge_real_full
+                ce_real_full = -tf.reduce_sum(avg_p_log_p_full_update)  # this is already in [0,1]
+                minus_ge_real_full2 = tf.reduce_sum(
+                    tf.multiply(avg_p_full_update,
+                                tf.div(tf.log(avg_p_full_update), np.log(self.m))))  # this is in [-1,0]
+                mi_real_full = (-ce_real_full) - minus_ge_real_full2
+                minus_ge_real_full = minus_ge_real_full2 + 1.0  # translating into [0,1]
                 motion_full_update = tf.assign_add(motion_full, (tf.stack([motion, motion_acc]) - motion_full) / up_t)
 
             # average on objective function terms
