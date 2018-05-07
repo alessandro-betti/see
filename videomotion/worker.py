@@ -197,6 +197,9 @@ class Worker:
             # recreating the folder where the model is saved (it was deleted by the "clearing" operation above)
             self.fe[self.__layer].create_model_folders()
 
+            # recreating the option file
+            self.output_stream.save_option(None)
+
     def run_step(self):
 
         while True:

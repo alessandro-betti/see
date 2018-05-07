@@ -401,7 +401,8 @@ class OutputStream:
         self.__last_saved_frame_number = self.__last_saved_frame_number + 1
 
     def save_option(self, opt, value):
-        self.__options[opt] = value
+        if opt is not None:
+            self.__options[opt] = value
 
         f = open(self.folder + os.sep + "options.txt", "w")
         if f is None or not f or f.closed:
