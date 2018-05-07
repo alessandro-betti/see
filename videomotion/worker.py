@@ -198,7 +198,7 @@ class Worker:
             self.fe[self.__layer].create_model_folders()
 
             # recreating the option file
-            self.output_stream.save_option(None)
+            self.output_stream.save_option(opt=None)
 
     def run_step(self):
 
