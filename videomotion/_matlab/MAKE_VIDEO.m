@@ -23,18 +23,28 @@ angle = -pi/2.0;
 jj = 0;
 j = 1;
 rep = 1;
+toy_original = toy;
+rot_on_itself = true;
 
 for z = 1:rep*rotating_steps
-    x = sqrt( (r*r) / (1.0 + tan(angle)^2) );
-    y = - tan(angle) * x;
     
-    if j > round(rotating_steps/2.0)
-        x = -x;
-        y = -y;
+    if ~rot_on_itself
+        x = sqrt( (r*r) / (1.0 + tan(angle)^2) );
+        y = - tan(angle) * x;
+
+        if j > round(rotating_steps/2.0)
+            x = -x;
+            y = -y;
+        end
+    else   
+        toy = imrotate(toy_original,rad2deg(pi/2.0+angle));
+        mask = imrotate(ones(size(toy_original)),rad2deg(pi/2.0+angle));
+        mask = mask == 1;
+        toy(~mask) = 255.0;
+        [hh,ww,~] = size(toy);
+        y = offsety;
+        x = offsetx;
     end
-    
-    x = x + offsetx;
-    y = y + offsety;
     
     a = round(y - hh/2.0);
     b = a + hh - 1;

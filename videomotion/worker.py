@@ -16,6 +16,7 @@ class Worker:
         self.__completed_repetitions = 0
         self.__start_time = None
         self.__elapsed_time = None
+        self.__elapsed_steps = 0.0
         self.__layer = 0
         self.__layers = options['layers']
         self.steps = 0.0
@@ -321,7 +322,8 @@ class Worker:
             step_time = time.time() - step_time
             self.__elapsed_time = time.time() - self.__start_time
             self.steps = self.steps + 1.0
-            self.measured_fps = self.steps / self.__elapsed_time
+            self.__elapsed_steps = self.__elapsed_steps + 1.0
+            self.measured_fps = self.__elapsed_steps / self.__elapsed_time
 
             # saving model (every 1000 steps)
             if int(self.steps) % 1000 == 0:
