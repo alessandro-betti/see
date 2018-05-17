@@ -22,7 +22,7 @@ def main(filename, file_dir, arguments):
     out('- Arguments: ' + str(arguments))
     out()
 
-    # declaring options
+    # declaring basic options
     input_file = ''
     input_folder = ''
     output_folder = ''
@@ -35,7 +35,20 @@ def main(filename, file_dir, arguments):
     force_gray = False
     visualization_port = 0
 
+    # parameters that do not depend on the layer number
     layers = 1  # number of layers
+    blur = True
+    step_size = -1
+    resume = 0
+    all_black = False
+    save_scores_only = False
+    check_params = True
+    grad = False
+    step_adapt = False
+    grad_order2 = False
+    rk = 0
+
+    # parameters that are defined layer-wise
     c_eps1 = {0: 10}  # layer-convergence threshold on the norm of the first derivative of q (squared norm)
     c_eps2 = {0: 10}  # layer-convergence threshold on the norm of the second derivative of q (squared norm)
     c_eps3 = {0: 10}  # layer-convergence threshold on the norm of the third derivative of q (squared norm)
@@ -61,20 +74,7 @@ def main(filename, file_dir, arguments):
     day_only = {0: False}
     init_fixed = {0: False}
 
-    blur = True
-    step_size = -1
-    resume = 0
-    all_black = False
-    save_scores_only = False
-    check_params = True
-    grad = False
-    step_adapt = False
-    grad_order2 = False
-    rk = 0
-
-    # os.remove("output.txt")
-
-    # getting options from command line arguments
+    # command line arguments and their description (yes, I should have made a dictionary...)
     accepted_options = ["port=", "resume=", "run=", "out=", "res=", "fps=", "frames=",
                         "gray=", "f=", "m=", "init_q=", "theta=", "alpha=", "beta=",
                         "k=", "gamma=", "lambdaC=", "lambdaE=", "lambdaM=",
@@ -83,8 +83,11 @@ def main(filename, file_dir, arguments):
                         "grad=", "rho=", "day_only=",
                         "save_scores_only=", "gew=", "rk=", "step_adapt=", "blur=", "grad_order2=",
                         "layers=", "c_eps1=", "c_eps2=", "c_eps3=", "c_frames=", "c_frames_min="]
-    description = ["port of the visualization service", "resume an experiment (binary flag)",
-                   "none", "none", "input resolution (example: 240x120)",
+    description = ["port of the visualization service",
+                   "resume an experiment from the output folder (binary flag - "
+                   "if set to 2 also clear the output folder and stats",
+                   "the video file (also folders of frames are supported)",
+                   "the path of the output folder (it will be created/cleared)", "input resolution (example: 240x120)",
                    "frames per second", "maximum number of frames to consider", "force gray scale (binary flag)",
                    "edge of a filter (example for a 3x3 filter: 3)", "number of features",
                    "maximum absolute value of initial components of q",
@@ -117,6 +120,7 @@ def main(filename, file_dir, arguments):
                    "layer-convergence threshold on the number of processed frames",
                    "minimum number of frames processed by each layer"]
 
+    # processing the input arguments in order to detect the layer ID of the arguments (when provided)
     if arguments is not None and len(arguments) > 0:
 
         # finding arguments that are about layer-related options
@@ -145,10 +149,10 @@ def main(filename, file_dir, arguments):
         usage(filename, accepted_options, description)
         sys.exit(2)
 
+    # processing the input arguments, extracting their values and pairing them with the layer ID
     try:
-        i = 0
-
         # handling the validated options (putting back the layer-related info)
+        i = 0
         for opt, arg in opts:
             if opt == '--run':
                 if os.path.isdir(arg):
@@ -290,7 +294,7 @@ def main(filename, file_dir, arguments):
         err(e)
         sys.exit(1)
 
-    # default options are the ones from the first layer
+    # default options are the ones defined in the first layer
     n = {0: -1}
     for i in range(0,layers):
         if i not in c_eps1:
@@ -370,6 +374,7 @@ def main(filename, file_dir, arguments):
     day_only = OrderedDict(sorted(day_only.items()))
     init_fixed = OrderedDict(sorted(init_fixed.items()))
 
+    # the output folder must be provided!
     if len(output_folder) == 0:
         usage(filename, accepted_options, description)
         sys.exit(2)
@@ -498,6 +503,7 @@ def main(filename, file_dir, arguments):
     out(json.dumps(options, indent=3))
     out()
 
+    # saving options to the output folder
     output_stream.save_option("resolution", str(w) + "x" + str(h))
     output_stream.save_option("w", str(w))
     output_stream.save_option("h", str(h))
@@ -515,12 +521,12 @@ def main(filename, file_dir, arguments):
         output_stream.save_option("url", "http://" + str(visualization_server.ip) + ":"
                                   + str(visualization_server.port))
 
-    status = [True]
-
+    # interruption (CTRL+C) halder
     def interruption(status_array, signal, frame):
         status_array[0] = False
 
     # creating the real worker
+    status = [True]
     try:
         worker = Worker(input_stream, output_stream, w, h, fps, frames, force_gray, repetitions, options,
                         resume > 0, resume > 1)
@@ -573,7 +579,7 @@ def usage(filename, accepted_options, description):
     out()
     out("where 'file' is video file, and '0' indicates the local web-cam")
     out()
-    out("Options can be (some descriptions will be added soon):")
+    out("Full list of parameters and options:")
     i = 0
     for k in accepted_options:
         if i < len(description):
