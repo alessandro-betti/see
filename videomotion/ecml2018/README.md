@@ -1,4 +1,4 @@
-# ECML 2018
+# TNNLS
 
 This folder contains the scripts used to reproduce the experiments described in the paper.
 
