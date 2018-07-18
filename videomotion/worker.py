@@ -4,6 +4,7 @@ from utils import out
 import json
 import os
 import numpy as np
+from collections import OrderedDict
 
 
 class Worker:
@@ -73,7 +74,7 @@ class Worker:
                 captions = ['steps'] + \
                            ['unused', 'obj', 'ce', 'minus_ge', 'mi', 'mi_real', 'motion', 'norm_q', 'norm_q_dot',
                             'norm_q_dot_dot', 'norm_q_mixed', 'norm_q_dot_dot_dot'] + \
-                           ['scaling', 'obj_comp', 'ce', 'minus_ge_comp', 'mi_comp', 'mi_real_comp',
+                           ['scaling', 'obj_comp', 'ce_comp', 'minus_ge_comp', 'mi_comp', 'mi_real_comp',
                             'motion_comp', 'norm_q_comp', 'norm_q_dot_comp', 'norm_q_dot_dot_comp',
                             'norm_q_mixed_comp', 'norm_q_dot_dot_dot_comp'] + \
                            ['is_night', 'rho'] + \
@@ -285,15 +286,12 @@ class Worker:
                           'eps2': self.fe[i].eps2,
                           'eps3': self.fe[i].eps3}
 
-                self.log[i].append(np.append(np.append(np.append(np.append([self.steps + 1],  # layer-steps start from 1
-                                                                           obj_values),
-                                                                 obj_comp_values),
-                                                       is_night_next_rho),
-                                             full_values))
+                self.log[i].append(np.append(np.append(np.append(np.append([self.steps + 1], obj_values),
+                                                                 obj_comp_values), is_night_next_rho), full_values))
 
                 features_by_layer.append(features)
                 filters_by_layer.append(filters)
-                others_by_layer.append(others)
+                others_by_layer.append(OrderedDict(sorted(others.items())))
 
                 # updating rho (print only)
                 self.__rho[i] = is_night_next_rho[1]
