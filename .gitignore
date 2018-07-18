@@ -243,3 +243,7 @@ TSWLatexianTemp*
 # custom folders (data, experiments)
 ./exp/*
 *.idea
+./data/*
+./mech/*
+./motion/*
+./motion2/*
