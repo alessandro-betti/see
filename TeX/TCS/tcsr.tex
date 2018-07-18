@@ -1,0 +1,45 @@
+\def\meno{\medskip\noindent}
+
+\centerline{\bf TCS approach}
+\meno
+Consider the functional
+$$\Gamma(q)=\int_0^T \psi(t)\Bigl({\mu\over 2} \ddot q^2+
+{\nu\over 2}\dot q^2+\gamma\dot q\ddot q+U(q,u)\Bigr)\, dt.$$
+Since
+$${\mu\over 2} \ddot q^2+
+{\nu\over 2}\dot q^2+\gamma\dot q={1\over 2}\pmatrix{\ddot q&\dot q\cr}
+\pmatrix{\mu&\gamma\cr \gamma&\nu\cr}\pmatrix{\ddot q\cr\dot q\cr},$$
+and
+$$\pmatrix{\mu&\gamma\cr \gamma&\nu\cr}=
+\pmatrix{\sqrt{\mu}&0\cr \gamma/\sqrt{\mu}&\sqrt{\nu-\gamma^2/\mu}\cr}
+\pmatrix{\sqrt{\mu}&\gamma/\sqrt{\mu}\cr 0&\sqrt{\nu-\gamma^2/\mu}\cr}
+\equiv M'M,$$
+then
+$${\mu\over 2} \ddot q^2+
+{\nu\over 2}\dot q^2+\gamma\dot q={1\over 2}\left|
+M \pmatrix{\ddot q\cr\dot q\cr}\right|^2={1\over 2}\Bigl((T_1 q)^2
++ (T_2 q)^2\Bigr),$$
+where
+$$T_1=\sqrt{\mu}{d^2\over dt^2}+{\gamma\over \sqrt{\mu}}{d\over dt}\equiv
+a{d^2\over dt^2}+b{d\over dt}\quad\hbox{and}\quad
+T_2=\sqrt{\nu-{\gamma^2\over\mu}}{d\over dt}\equiv c{d\over dt}.$$
+According to what has been done in the TCS paper the Euler-Lagrange equations
+can be written as
+$$T_1^*(\psi T_1 q)+T_2^*(\psi T_2 q)+\psi\nabla_q U=0,\eqno(1)$$
+that is to say
+$$a^2\psi q^{(4)}+2a^2\dot \psi q^{(3)}+[a^2\ddot\psi+ab\dot\psi
+-(b^2+c^2)\psi]\ddot q +[ab\ddot\psi-(b^2+c^2)\dot\psi]\dot q+\nabla_q U=0,$$
+which is indeed the result already known.
+
+\meno
+{\bf A possible energy balance.\enspace} First of all redefine
+$\psi T_i\to T_i$, and $\psi U\to U$; then~(1) becomes
+$$T_1^* T_1 q+T_2^*T_2 q+\nabla_q U=0;$$
+$$\int (\dot q\cdot T_1^* T_1 q +\dot q\cdot T^*_2 T_2q
++\dot q\cdot\nabla_q U)=0.$$
+Now assume that $T_1 q(t_1)\equiv0$ and $T_2 q(t_1)\equiv 0$. Then this
+equation becomes
+$$\int (T_1\dot q \cdot T_1 q+T_2\dot q\cdot T_2q+\dot q\cdot\nabla_q U)=0.$$
+We have that $T_i\dot q=T_iD q=[T_i,D]q+DT_iq$
+
+\bye

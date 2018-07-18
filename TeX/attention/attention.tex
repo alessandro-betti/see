@@ -1,0 +1,139 @@
+\input colordvi
+\magnification=\magstep1
+\baselineskip14pt
+\tracingpages=1 % show paging decisions, to help with figure placement
+\baselineskip=12pt minus .1pt % allow tiny bit of flexibility
+
+\def\today{\ifcase\month\or
+  January\or February\or March\or April\or May\or June\or
+  July\or August\or September\or October\or November\or December\fi
+  \space\number\day, \number\year}
+
+\newcount\twodigits
+\def\hours{\twodigits=\time \divide\twodigits by 60 \printtwodigits
+  \multiply\twodigits by-60 \advance\twodigits by\time
+  :\printtwodigits}
+
+\def\gobbleone1{}
+\def\printtwodigits{\advance\twodigits100
+  \expandafter\gobbleone\number\twodigits
+  \advance\twodigits-100 }
+  
+\def\frac#1#2{{#1\over #2}}
+\def\feat{C\mskip -10mu\lower-2pt\hbox{\fiverm 1}\,}
+\def\dts{\mathinner{\ldotp\ldotp}}
+\def\ast{\mathop{\hbox{\lower 1.5pt\hbox{$\buildrel x\over *$}}}}
+\def\Ast#1{\mathop{\hbox{\lower 1.5pt\hbox{$\buildrel #1\over *$}}}}
+\def\tr{\mathop{\rm tr}}
+\def\vec{\mathop{\rm vec}}
+
+\font\ninerm=cmr9
+\font\eightrm=cmr8
+
+%star heading
+\font\manfnt=manfnt % special symbols from the TeX project
+\font\titlefont=cmssbx10 scaled\magstep2
+\def\volheadline#1{\line{\cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill
+       \titlefont\ #1\ \cleaders\hbox{\raise3pt\hbox{\manfnt\char'36}}\hfill}}
+%end
+
+% macros for verbatim scanning
+% the max number of \tt chars/line is 66 (10pt), 73 (9pt), 81 (8pt), 93 (7pt)
+% minus 4 or 5 characters for indentation at the left
+\chardef\other=12
+\def\ttverbatim{\catcode`\\=\other
+  \catcode`\{=\other
+  \catcode`\}=\other
+  \catcode`\$=\other
+  \catcode`\&=\other
+  \catcode`\#=\other
+  \catcode`\%=\other
+  \catcode`\~=\other
+  \catcode`\_=\other
+  \catcode`\^=\other
+  \obeyspaces \obeylines \tt}
+\def\begintt{$$\ttverbatim \catcode`\|=0 \ttfinish}
+{\catcode`\|=0 \catcode`|\=\other % | is temporary escape character
+  |obeylines   % end of line is active
+  |gdef|intt#1^^M{|noalign{#1}}%
+  |gdef|ttfinish#1^^M#2\endtt{#1|let^^M=|cr %
+    |halign{|hskip|parindent##|hfil|cr#2}$$}}
+
+\line{{\bf Incorporating the focus of attention}\hfil{\eightrm
+rough notes, \today\/ @ \hours}}
+\bigskip
+\bigskip\begingroup\narrower\narrower
+\noindent Assuming that we are in posses of an attention
+trajectory we will reformulate the theory to seriously take into
+account this.
+\par\endgroup
+
+\bigskip
+\bigskip\noindent
+The features are as always extracted by convolutional processing of the
+input signal:
+$$\feat_i(x,t)=\sigma_i(A_1,\dots,A_n); \qquad A_i(x,t):=\sum_{j=1}^m\int_X
+\varphi_{ij}(x-\xi,t)C_j(\xi,t)\, d\xi.$$
+Once discretized the mutual information will go as usual into a potential,
+we just need to take care of the motion invariance term.
+
+We require the invariance under motion on the trajectory of attention
+$t\mapsto a(t)\in X$; that is to say we impose that the functions
+$\alpha_i(t):=A_i(a(t),t)$ are such that $\dot \alpha_i=0$.
+
+The corresponding term in the action is
+$$\int_0^T e^{\theta t} v_m(t)\, dt; \qquad v_m(t)=\frac{1}{2}
+\sum_{i=1}^n(\partial_t A_i(a(t),t)+\nabla_x A_i(a(t),t))^2.$$
+Assuming that the convolution is invertible 
+we then have
+$$v_m(t)=\frac{1}{2}
+\sum_{i=1}^n\biggl(
+\sum_{j=1}^m\int_X\Bigl(\partial_t \varphi_{ij}(\xi,t) C_j(a(t)-\xi,t)
++\varphi_{ij}(\xi,t){d\over dt}C_j(a(t)-\xi,t)\Bigr) \biggr)^2,$$
+or written on a discretized receptive field of size $\ell\times\ell$:
+$$v_m(t)=\frac{1}{2}
+\sum_{i=1}^n\biggl(
+\sum_{j=1}^m\sum_{\xi_1,\xi_2=1}^\ell
+\Bigl(\dot \varphi_{ij\xi_1\xi_2}(t) \gamma_{j\xi_1\xi_2}(t)
++\varphi_{ij\xi_1\xi_2}(t)\dot\gamma_{j\xi_1\xi_2}(t)\Bigr) \biggr)^2,$$
+where $\gamma_{j\xi_1\xi_2}(t):=C_{j(a_1(t)-\xi_1)(a_2(t)-\xi_2)}(t)$.
+Expanding the square we thus obtain
+$$\eqalign{
+v_m={1\over 2}\sum_{i=1}^n\sum_{j,k,\xi_1,\xi_2,z_1,z_2}
+\bigl(&\dot \varphi_{ij\xi_1\xi_2} \gamma_{j\xi_1\xi_2}\dot
+\varphi_{ik z_1z_2} \gamma_{kz_1z_2}
++\varphi_{ij\xi_1\xi_2} \dot\gamma_{j\xi_1\xi_2}
+\varphi_{ik z_1z_2} \dot\gamma_{kz_1z_2}\cr
+&+2\dot \varphi_{ij\xi_1\xi_2} \gamma_{j\xi_1\xi_2}
+\varphi_{ik z_1z_2} \dot\gamma_{kz_1z_2}\bigr).\cr}$$
+If we now define
+$$
+Q:=\pmatrix{\varphi_{1111}&\varphi_{1112}&\cdots&\varphi_{1m\ell\ell}\cr
+           \varphi_{2111}&\varphi_{2112}&\cdots&\varphi_{2m\ell\ell}\cr
+           \vdots&\vdots&\cdots&\vdots\cr
+           \varphi_{n111}&\varphi_{n112}&\cdots&\varphi_{nm\ell\ell}},
+           \quad\hbox{and}\quad \gamma:=(\gamma_{111},\gamma_{112},\dots,\gamma_{m\ell\ell}).
+$$
+With this notation we have
+$$\eqalign{
+v_m&={1\over2}\sum_{ijk}\Bigl(\dot Q_{ij}(\gamma\otimes\gamma)_{jk}
+\dot Q_{ik}+Q_{ij}(\dot\gamma\otimes\dot\gamma)_{jk}
+Q_{ik}+2\dot Q_{ij}(\gamma\otimes\dot\gamma)_{jk}
+Q_{ik}\Bigr)\cr
+&{1\over 2}\Bigl(\tr(\dot Q\gamma\otimes\gamma \dot Q')
++\tr(Q\dot\gamma\otimes\dot\gamma Q')
++2\tr(\dot Q\gamma\otimes\dot\gamma Q')\Bigr).\cr}$$
+Alternatively if we let $q:=\vec{Q}$ (row vectorization of Q), then
+$$v_m={1\over 2}\biggl(\dot q\cdot \Bigl(\bigoplus_{i=1}^n
+\gamma\otimes\gamma\Bigr) \dot q
++q\cdot \Bigl(\bigoplus_{i=1}^n\dot\gamma\otimes\dot\gamma\Bigr) q
++2\dot q\cdot\Bigl(\bigoplus_{i=1}^n\gamma\otimes\dot\gamma\Bigr) q\biggr)$$
+This means that by comparison with calculations done in
+the arxiv report  we have that
+$$M^\natural \gets \bigoplus_{i=1}^n\gamma\otimes\gamma,\quad
+O^\natural\gets \bigoplus_{i=1}^n\dot\gamma\otimes\dot\gamma\quad
+\hbox{and}\quad N^\natural\gets\bigoplus_{i=1}^n\dot \gamma\otimes \gamma.$$
+
+
+
+\bye
